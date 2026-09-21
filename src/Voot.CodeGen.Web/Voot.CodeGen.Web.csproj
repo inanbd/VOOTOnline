@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Voot.CodeGen.Application\Voot.CodeGen.Application.csproj" />
+    <ProjectReference Include="..\Voot.CodeGen.Domain\Voot.CodeGen.Domain.csproj" />
+    <ProjectReference Include="..\Voot.CodeGen.Infrastructure\Voot.CodeGen.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

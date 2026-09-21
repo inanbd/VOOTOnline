@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Voot.CodeGen.Application/Voot.CodeGen.Application.csproj" />
+    <Project Path="src/Voot.CodeGen.Domain/Voot.CodeGen.Domain.csproj" />
+    <Project Path="src/Voot.CodeGen.Generation/Voot.CodeGen.Generation.csproj" />
+    <Project Path="src/Voot.CodeGen.Infrastructure/Voot.CodeGen.Infrastructure.csproj" />
+    <Project Path="src/Voot.CodeGen.Web/Voot.CodeGen.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Voot.CodeGen.Application.Tests/Voot.CodeGen.Application.Tests.csproj" />
+    <Project Path="tests/Voot.CodeGen.Generation.Tests/Voot.CodeGen.Generation.Tests.csproj" />
+  </Folder>
+</Solution>
