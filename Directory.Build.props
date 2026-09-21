@@ -9,5 +9,8 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <!-- CA1859 pushes concrete collection types through private helpers for a dispatch win
+         that is irrelevant here and costs readability. -->
+    <NoWarn>$(NoWarn);CA1859</NoWarn>
   </PropertyGroup>
 </Project>
