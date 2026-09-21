@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Voot.CodeGen.Domain\Voot.CodeGen.Domain.csproj" />
+    <ProjectReference Include="..\Voot.CodeGen.Generation\Voot.CodeGen.Generation.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
