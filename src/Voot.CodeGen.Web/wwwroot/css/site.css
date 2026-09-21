@@ -93,7 +93,7 @@ table.data td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .log { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .84rem; }
 .log .row-entry { display: flex; gap: .75rem; padding: .3rem .5rem; border-bottom: 1px solid #eef1f5; }
 .log .ts { color: var(--muted); white-space: nowrap; }
-.log .lvl { width: 4.5rem; font-weight: 600; }
+.log .lvl { width: 5.5rem; flex: 0 0 5.5rem; white-space: nowrap; font-weight: 600; }
 .log .lvl-Error { color: var(--bad); }
 .log .lvl-Warning { color: var(--warn); }
 .log .lvl-Information { color: var(--muted); }
