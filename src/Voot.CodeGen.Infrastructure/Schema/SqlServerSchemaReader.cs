@@ -105,7 +105,7 @@ public sealed class SqlServerSchemaReader : ISchemaReader
                 t.name  AS TableName,
                 kc.name AS ConstraintName,
                 c.name  AS ColumnName,
-                ic.key_ordinal AS Ordinal
+                CAST(ic.key_ordinal AS int) AS Ordinal
             FROM sys.key_constraints kc
             INNER JOIN sys.tables t        ON t.object_id = kc.parent_object_id
             INNER JOIN sys.schemas s       ON s.schema_id = t.schema_id
@@ -129,7 +129,7 @@ public sealed class SqlServerSchemaReader : ISchemaReader
                 rs.name        AS ReferencedSchema,
                 rt.name        AS ReferencedTable,
                 rc.name        AS ReferencedColumn,
-                fkc.constraint_column_id AS Ordinal
+                CAST(fkc.constraint_column_id AS int) AS Ordinal
             FROM sys.foreign_keys fk
             INNER JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
             INNER JOIN sys.tables t    ON t.object_id = fk.parent_object_id
@@ -153,10 +153,10 @@ public sealed class SqlServerSchemaReader : ISchemaReader
                 t.name  AS TableName,
                 i.name  AS IndexName,
                 c.name  AS ColumnName,
-                ic.key_ordinal AS Ordinal,
+                CAST(ic.key_ordinal AS int) AS Ordinal,
                 i.is_unique       AS IsUnique,
                 i.is_primary_key  AS IsPrimaryKey,
-                CASE WHEN i.type = 1 THEN 1 ELSE 0 END AS IsClustered
+                CAST(CASE WHEN i.type = 1 THEN 1 ELSE 0 END AS bit) AS IsClustered
             FROM sys.indexes i
             INNER JOIN sys.tables t         ON t.object_id = i.object_id
             INNER JOIN sys.schemas s        ON s.schema_id = t.schema_id

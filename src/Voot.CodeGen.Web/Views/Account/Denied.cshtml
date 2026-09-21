@@ -1,0 +1,15 @@
+@{
+    ViewData["Title"] = "Access denied";
+}
+
+<div class="card">
+    <h2>Access denied</h2>
+    <div class="card-body">
+        <p>You are signed in, but this action needs a permission your account does not have.</p>
+        <p class="small-muted">
+            Project work requires being assigned to that project; creating projects and managing
+            accounts requires the Administrator role. Ask an administrator if you need access.
+        </p>
+        <a asp-controller="Home" asp-action="Index" class="btn btn-primary">Back to projects</a>
+    </div>
+</div>

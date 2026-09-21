@@ -124,8 +124,12 @@ public abstract class DataAccessEmitterBase : EmitterBase
 
             if (IncludeExtendedQueries && settings.IncludeMaxAndRowCount)
             {
-                writer.Line(
-                    $"private const string GET{upper}MAXIMUM{NameResolver.ToUpperCase(primaryKey.Name)} = \"{names.MaxProcedure(table)}\";");
+                if (SqlTypeMap.SupportsMaximumKey(primaryKey))
+                {
+                    writer.Line(
+                        $"private const string GET{upper}MAXIMUM{NameResolver.ToUpperCase(primaryKey.Name)} = \"{names.MaxProcedure(table)}\";");
+                }
+
                 writer.Line($"private const string GET{upper}ROWCOUNT = \"{names.RowCountProcedure(table)}\";");
             }
 
@@ -408,32 +412,37 @@ public abstract class DataAccessEmitterBase : EmitterBase
 
             if (IncludeExtendedQueries && settings.IncludeMaxAndRowCount)
             {
-                WriteSummary(writer, $"Returns the highest {primaryKey.Name} currently stored.");
-                using (writer.Block($"public {primaryKeyType} GetMax{primaryKey.Name}()"))
+                // Only a numeric key has a meaningful maximum; see the stored procedure emitter.
+                if (SqlTypeMap.SupportsMaximumKey(primaryKey))
                 {
-                    writer.Line($"{primaryKeyType} value = default({primaryKeyType});");
-                    using (writer.Block($"using (SqlCommand cmd = GetSPCommand(GET{upper}MAXIMUM{NameResolver.ToUpperCase(primaryKey.Name)}))"))
+                    WriteSummary(writer, $"Returns the highest {primaryKey.Name} currently stored.");
+                    using (writer.Block($"public {primaryKeyType} GetMax{primaryKey.Name}()"))
                     {
-                        writer.Line("SqlDataReader reader;");
-                        writer.Line($"value = ({primaryKeyType})SelectRecords(cmd, out reader);");
-                        writer.Line("reader.Close();");
-                        writer.Line("reader.Dispose();");
+                        writer.Line($"{primaryKeyType} value = default({primaryKeyType});");
+                        using (writer.Block($"using (SqlCommand cmd = GetSPCommand(GET{upper}MAXIMUM{NameResolver.ToUpperCase(primaryKey.Name)}))"))
+                        {
+                            writer.Line("SqlDataReader reader;");
+                            writer.Line($"value = ({primaryKeyType})SelectRecords(cmd, out reader);");
+                            writer.Line("reader.Close();");
+                            writer.Line("reader.Dispose();");
+                        }
+
+                        writer.Blank();
+                        writer.Line("return value;");
                     }
 
                     writer.Blank();
-                    writer.Line("return value;");
                 }
 
-                writer.Blank();
-
+                // COUNT(*) is an int regardless of the key's type.
                 WriteSummary(writer, $"Returns the total number of {className} rows.");
-                using (writer.Block($"public {primaryKeyType} GetRowCount()"))
+                using (writer.Block("public int GetRowCount()"))
                 {
-                    writer.Line($"{primaryKeyType} value = default({primaryKeyType});");
+                    writer.Line("int value = 0;");
                     using (writer.Block($"using (SqlCommand cmd = GetSPCommand(GET{upper}ROWCOUNT))"))
                     {
                         writer.Line("SqlDataReader reader;");
-                        writer.Line($"value = ({primaryKeyType})SelectRecords(cmd, out reader);");
+                        writer.Line("value = (int)SelectRecords(cmd, out reader);");
                         writer.Line("reader.Close();");
                         writer.Line("reader.Dispose();");
                     }

@@ -1,0 +1,174 @@
+@model RunDetailViewModel
+@{
+    var run = Model.Detail.Run;
+    ViewData["Title"] = $"Run · {Model.Project.Name}";
+}
+
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h1 class="h4 mb-1">
+            Run
+            <span id="run-status" class="pill pill-@run.Status.ToString().ToLowerInvariant()">@run.Status</span>
+        </h1>
+        <div class="small-muted">
+            <a asp-controller="Projects" asp-action="Details" asp-route-id="@Model.Project.Id">@Model.Project.Name</a>
+            &middot; queued @run.QueuedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+            by @run.RequestedByUserName
+            @if (run.Duration is { } duration)
+            {
+                <text>&middot; took @duration.TotalSeconds.ToString("F1")s</text>
+            }
+        </div>
+    </div>
+    <div id="download-area">
+        @if (run.ArtifactId is { } artifactId)
+        {
+            <a asp-action="Download" asp-route-id="@artifactId" class="btn btn-primary">Download archive</a>
+        }
+    </div>
+</div>
+
+<div id="progress-note" class="alert alert-info @(run.IsTerminal ? "d-none" : "")">
+    <strong id="stage-label">@run.Stage</strong> — this page updates itself while the run is in progress.
+</div>
+
+@if (run.Status == RunStatus.Failed)
+{
+    <div class="alert alert-danger">
+        <strong>The run failed during @run.Stage.</strong>
+        <div class="mt-1">@run.ErrorMessage</div>
+        @if (!string.IsNullOrWhiteSpace(run.ErrorDetail))
+        {
+            <pre class="detail">@run.ErrorDetail</pre>
+        }
+    </div>
+}
+
+<div class="card">
+    <h2>Summary</h2>
+    <div class="card-body">
+        <div class="row small">
+            <div class="col-6 col-md-2"><div class="small-muted">Tables</div><div class="fs-5">@run.TableCount</div></div>
+            <div class="col-6 col-md-2"><div class="small-muted">Skipped</div><div class="fs-5">@run.SkippedTableCount</div></div>
+            <div class="col-6 col-md-2"><div class="small-muted">Files</div><div class="fs-5">@run.FileCount</div></div>
+            <div class="col-6 col-md-2"><div class="small-muted">Warnings</div><div class="fs-5">@run.WarningCount</div></div>
+            <div class="col-6 col-md-2"><div class="small-muted">Errors</div><div class="fs-5 @(run.ErrorCount > 0 ? "text-danger" : "")">@run.ErrorCount</div></div>
+            <div class="col-6 col-md-2"><div class="small-muted">Style</div><div class="fs-5">@run.OutputStyle</div></div>
+        </div>
+        @if (Model.Detail.Artifact is { } artifact)
+        {
+            <hr />
+            <div class="small-muted">
+                <span class="mono">@artifact.FileName</span>
+                &middot; @($"{artifact.SizeBytes:N0}") bytes
+                &middot; @artifact.FileCount files
+                @if (!string.IsNullOrEmpty(artifact.Sha256))
+                {
+                    <text>&middot; sha256 <span class="mono">@artifact.Sha256[..16]…</span></text>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@if (Model.Detail.Change is { } change)
+{
+    <div class="card">
+        <h2>SQL applied</h2>
+        <div class="card-body">
+            @if (!string.IsNullOrWhiteSpace(change.Title))
+            {
+                <div class="mb-2"><strong>@change.Title</strong></div>
+            }
+            @if (change.Status == ChangeRequestStatus.Failed)
+            {
+                <div class="alert alert-danger py-2">
+                    @change.ErrorMessage
+                    @if (change.ErrorNumber is { } number)
+                    {
+                        <div class="small">SQL Server error @number@(change.ErrorLineNumber is { } line ? $", line {line}" : "")</div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="small-muted mb-2">
+                    @change.BatchesExecuted batch(es), @change.RowsAffected row(s) affected.
+                </div>
+            }
+            <pre class="detail">@change.SqlText</pre>
+        </div>
+    </div>
+}
+
+<div class="card">
+    <h2>Log</h2>
+    <div class="card-body p-0">
+        <div class="log">
+            @foreach (var entry in Model.Detail.Logs)
+            {
+                <div class="row-entry">
+                    <span class="ts">@entry.LoggedUtc.ToLocalTime().ToString("HH:mm:ss")</span>
+                    <span class="lvl lvl-@entry.Level">@entry.Level</span>
+                    <span class="msg">@(entry.TableName is null ? "" : $"[{entry.TableName}] ")@entry.Message@if (!string.IsNullOrWhiteSpace(entry.Detail)) { <pre class="detail">@entry.Detail</pre> }</span>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (Model.Detail.Files.Count > 0)
+{
+    <div class="card">
+        <h2>Generated files (@Model.Detail.Files.Count)</h2>
+        <div class="card-body p-0">
+            <table class="data">
+                <thead><tr><th>Path</th><th>Emitter</th><th>Table</th><th class="num">Bytes</th></tr></thead>
+                <tbody>
+                @foreach (var file in Model.Detail.Files)
+                {
+                    <tr>
+                        <td class="mono">@file.RelativePath</td>
+                        <td class="small-muted">@file.Emitter</td>
+                        <td class="small-muted">@file.TableName</td>
+                        <td class="num">@($"{file.SizeBytes:N0}")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    @if (!run.IsTerminal)
+    {
+        <script>
+            // Poll while the run is in flight, then reload once so the log and file list fill in.
+            (function () {
+                const url = '@Url.Action("Status", "Runs", new { id = run.Id })';
+                const statusEl = document.getElementById('run-status');
+                const stageEl = document.getElementById('stage-label');
+
+                const timer = setInterval(async function () {
+                    try {
+                        const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                        if (!response.ok) { return; }
+
+                        const state = await response.json();
+                        statusEl.textContent = state.status;
+                        statusEl.className = 'pill pill-' + String(state.status).toLowerCase();
+                        stageEl.textContent = state.stage;
+
+                        if (state.isTerminal) {
+                            clearInterval(timer);
+                            window.location.reload();
+                        }
+                    } catch {
+                        // A transient failure is not worth surfacing; the next tick retries.
+                    }
+                }, 2000);
+            })();
+        </script>
+    }
+}

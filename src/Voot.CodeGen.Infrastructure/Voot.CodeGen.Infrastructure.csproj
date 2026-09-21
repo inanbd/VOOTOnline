@@ -26,4 +26,8 @@
     <EmbeddedResource Include="Data\Scripts\*.sql" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Voot.CodeGen.Application.Tests" />
+  </ItemGroup>
+
 </Project>

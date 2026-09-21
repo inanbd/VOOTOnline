@@ -17,6 +17,12 @@ public sealed class ProjectRepository(ISqlConnectionFactory connectionFactory) :
         [SettingsJson], [CreatedByUserId], [CreatedUtc], [UpdatedUtc], [IsActive]
         """;
 
+    /// <summary>The same list qualified for the query that joins the assignment table.</summary>
+    private const string ProjectColumns = """
+        p.[Id], p.[Name], p.[Description], p.[ProtectedConnectionString], p.[ConnectionStringSummary],
+        p.[SettingsJson], p.[CreatedByUserId], p.[CreatedUtc], p.[UpdatedUtc], p.[IsActive]
+        """;
+
     /// <summary>The row shape; SettingsJson is expanded into <see cref="GenerationSettings"/> on read.</summary>
     private sealed record ProjectRow(
         Guid Id, string Name, string? Description, string ProtectedConnectionString,
@@ -87,7 +93,7 @@ public sealed class ProjectRepository(ISqlConnectionFactory connectionFactory) :
 
         var rows = await connection.QueryAsync<ProjectRow>(new CommandDefinition(
             $"""
-            SELECT {SelectColumns}
+            SELECT {ProjectColumns}
             FROM [dbo].[Projects] p
             INNER JOIN [dbo].[ProjectUsers] pu ON pu.[ProjectId] = p.[Id]
             WHERE pu.[UserId] = @userId

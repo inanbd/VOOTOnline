@@ -1,0 +1,82 @@
+@model IReadOnlyList<DirectoryUser>
+@{
+    ViewData["Title"] = "Users";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h4 mb-0">Users</h1>
+    <a asp-action="Create" class="btn btn-primary btn-sm">New user</a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="data">
+            <thead>
+                <tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th class="text-end">Actions</th></tr>
+            </thead>
+            <tbody>
+            @foreach (var user in Model)
+            {
+                <tr>
+                    <td>
+                        @user.DisplayName
+                        <div class="small-muted mono">@user.UserName</div>
+                    </td>
+                    <td class="small-muted">@user.Email</td>
+                    <td>
+                        @if (user.IsAdministrator)
+                        {
+                            <span class="pill pill-running">administrator</span>
+                        }
+                        else
+                        {
+                            <span class="pill pill-queued">user</span>
+                        }
+                    </td>
+                    <td>
+                        @if (user.IsActive)
+                        {
+                            <span class="pill pill-succeeded">active</span>
+                        }
+                        else
+                        {
+                            <span class="pill pill-inactive">disabled</span>
+                        }
+                    </td>
+                    <td class="text-end">
+                        <form asp-action="ToggleAdministrator" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@user.Id" />
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                @(user.IsAdministrator ? "Demote" : "Make admin")
+                            </button>
+                        </form>
+                        <form asp-action="ToggleActive" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@user.Id" />
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                @(user.IsActive ? "Disable" : "Enable")
+                            </button>
+                        </form>
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="collapse" data-bs-target="#reset-@user.Id">Reset password</button>
+                    </td>
+                </tr>
+                <tr class="collapse" id="reset-@user.Id">
+                    <td colspan="5" class="bg-light">
+                        <form asp-action="ResetPassword" method="post" class="d-flex gap-2 align-items-center">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@user.Id" />
+                            <label class="small-muted" for="pw-@user.Id">New password for @user.UserName</label>
+                            <input type="password" name="newPassword" id="pw-@user.Id"
+                                   class="form-control form-control-sm" style="max-width: 22rem"
+                                   autocomplete="new-password" required />
+                            <button type="submit" class="btn btn-sm btn-primary">Set password</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

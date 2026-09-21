@@ -96,6 +96,42 @@ column is now checked against `sys.columns` for the target table and the directi
 fixed pair of literals, so neither can carry an injection. See the note below about the
 `WHERE` fragment, which cannot be secured the same way.
 
+### 10. `GetPaged` passed an expression to `sp_executesql`
+
+The paging procedure computed its offset inline:
+
+```sql
+EXEC sp_executesql @Sql, N'@Skip int, @Take int',
+    @Skip = @PageIndex * @RowPerPage, @Take = @RowPerPage;
+```
+
+`sp_executesql` takes variables, not expressions, so every paging procedure failed to create
+with `Msg 102, incorrect syntax`. The offset is now computed into a variable first. Found by
+executing the generated scripts against SQL Server.
+
+### 11. A non-numeric key produced a procedure that would not compile
+
+The maximum-key procedure emitted `SELECT ISNULL(MAX([TagId]), 0)`. Against a
+`uniqueidentifier` key that is `Msg 206, operand type clash`, and a GUID has no meaningful
+maximum anyway. The procedure and the matching data access method are now emitted only for
+numeric keys.
+
+Relatedly, `GetRowCount` returned the *primary key's* type, which is wrong for any table
+whose key is not numeric: `COUNT(*)` is an `int` whatever the key is. It now returns `int`.
+
+### 12. A nullable foreign key was passed to a non-nullable parameter
+
+The generated manager loaded related entities with:
+
+```csharp
+customerObject.CountryIdObject = countryManager.Get(customerObject.CountryId, fillChilds);
+```
+
+When the foreign key column is nullable, `CountryId` is `Nullable<Int32>` and `Get` takes
+`Int32`, so the generated code did not compile. The call is now guarded on `HasValue` and
+passes `.Value`, leaving the navigation property null when the key is unset. Found by
+compiling the generated output against the framework contract.
+
 ## Intentional additions
 
 - **Output style.** Each project selects Legacy (faithful to the originals:

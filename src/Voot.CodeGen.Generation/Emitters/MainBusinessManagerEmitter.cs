@@ -213,10 +213,44 @@ public sealed class MainBusinessManagerEmitter : EmitterBase
                 var parentManager = parentClass + "Manager";
                 var managerVar = NameResolver.ToCamelCase(parentClass) + "Manager";
 
+                // A nullable foreign key cannot be handed straight to Get, which takes the key
+                // type. Unwrap it behind a guard so an unset key simply leaves the child null.
+                var keyColumn = foreignKey.ForeignKeyMemberColumns.Count > 0
+                    ? foreignKey.ForeignKeyMemberColumns[0]
+                    : null;
+                var isNullableValueKey = keyColumn is { AllowDbNull: true }
+                    && SqlTypeMap.Require(keyColumn).IsValueType;
+                var isNullableReferenceKey = keyColumn is { AllowDbNull: true }
+                    && !SqlTypeMap.Require(keyColumn).IsValueType;
+
                 writer.Line($"// {stem}Object is a {parentClass} resolved through {stem}.");
-                using (writer.Block($"using ({parentManager} {managerVar} = new {parentManager}({contextName}))"))
+
+                if (isNullableValueKey)
                 {
-                    writer.Line($"{objectVar}.{stem}Object = {managerVar}.Get({objectVar}.{stem}, fillChilds);");
+                    using (writer.Block($"if ({objectVar}.{stem}.HasValue)"))
+                    {
+                        using (writer.Block($"using ({parentManager} {managerVar} = new {parentManager}({contextName}))"))
+                        {
+                            writer.Line($"{objectVar}.{stem}Object = {managerVar}.Get({objectVar}.{stem}.Value, fillChilds);");
+                        }
+                    }
+                }
+                else if (isNullableReferenceKey)
+                {
+                    using (writer.Block($"if ({objectVar}.{stem} != null)"))
+                    {
+                        using (writer.Block($"using ({parentManager} {managerVar} = new {parentManager}({contextName}))"))
+                        {
+                            writer.Line($"{objectVar}.{stem}Object = {managerVar}.Get({objectVar}.{stem}, fillChilds);");
+                        }
+                    }
+                }
+                else
+                {
+                    using (writer.Block($"using ({parentManager} {managerVar} = new {parentManager}({contextName}))"))
+                    {
+                        writer.Line($"{objectVar}.{stem}Object = {managerVar}.Get({objectVar}.{stem}, fillChilds);");
+                    }
                 }
 
                 writer.Blank();

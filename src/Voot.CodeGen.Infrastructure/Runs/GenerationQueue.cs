@@ -8,6 +8,9 @@ namespace Voot.CodeGen.Infrastructure.Runs;
 /// Runs are also persisted with a Queued status, so a restart can recover anything that was
 /// in flight rather than leaving it pending forever.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Naming", "CA1711:Identifiers should not have incorrect suffix",
+    Justification = "The type is a queue; the suffix is accurate.")]
 public sealed class GenerationQueue : IGenerationQueue
 {
     private readonly Channel<Guid> _channel = Channel.CreateUnbounded<Guid>(

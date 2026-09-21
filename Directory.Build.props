@@ -6,11 +6,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Microsoft.Data.SqlClient throws on startup under invariant globalization. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <!-- CA1859 pushes concrete collection types through private helpers for a dispatch win
          that is irrelevant here and costs readability. -->
     <NoWarn>$(NoWarn);CA1859</NoWarn>
+    <!-- CA1848/CA1873 want LoggerMessage delegates for every call site. That is a hot-path
+         optimisation; these log once per request or once per generation run. -->
+    <NoWarn>$(NoWarn);CA1848;CA1873</NoWarn>
   </PropertyGroup>
 </Project>

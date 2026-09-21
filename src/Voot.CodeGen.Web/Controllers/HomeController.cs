@@ -1,24 +1,34 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using Voot.CodeGen.Web.Models;
+using Voot.CodeGen.Application.Abstractions;
+using Voot.CodeGen.Application.Services;
+using Voot.CodeGen.Web.ViewModels;
 
 namespace Voot.CodeGen.Web.Controllers;
 
-public class HomeController : Controller
+public sealed class HomeController(
+    ProjectAccessService access,
+    IGenerationRepository repository) : Controller
 {
-    public IActionResult Index()
+    /// <summary>Dashboard: the projects the caller may see, each with its most recent run.</summary>
+    public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
-        return View();
-    }
+        var projects = await access.GetVisibleProjectsAsync(cancellationToken);
+        var items = new List<ProjectListItemViewModel>(projects.Count);
 
-    public IActionResult Privacy()
-    {
-        return View();
+        foreach (var project in projects)
+        {
+            var runs = await repository.GetRunsAsync(project.Id, take: 1, cancellationToken);
+            items.Add(new ProjectListItemViewModel { Project = project, LatestRun = runs.Count > 0 ? runs[0] : null });
+        }
+
+        return View(items);
     }
 
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    public IActionResult Error()
-    {
-        return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
-    }
+    public IActionResult Error() =>
+        View(new Models.ErrorViewModel
+        {
+            RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier
+        });
 }

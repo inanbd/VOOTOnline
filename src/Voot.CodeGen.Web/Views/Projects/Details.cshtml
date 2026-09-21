@@ -1,0 +1,167 @@
+@model ProjectDetailViewModel
+@{
+    ViewData["Title"] = Model.Project.Name;
+}
+
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h1 class="h4 mb-1">
+            @Model.Project.Name
+            @if (!Model.Project.IsActive)
+            {
+                <span class="pill pill-inactive">inactive</span>
+            }
+        </h1>
+        <div class="small-muted">
+            <span class="mono">@Model.Project.ConnectionStringSummary</span>
+            &middot; @Model.Project.Settings.OutputStyle output
+            &middot; prefix <span class="mono">@(string.IsNullOrEmpty(Model.Project.Settings.TablePrefix) ? "(none)" : Model.Project.Settings.TablePrefix)</span>
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <a asp-controller="Runs" asp-action="Submit" asp-route-projectId="@Model.Project.Id"
+           class="btn btn-primary btn-sm">Apply SQL</a>
+
+        <form asp-controller="Runs" asp-action="Regenerate" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="projectId" value="@Model.Project.Id" />
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Regenerate only</button>
+        </form>
+
+        @if (Model.IsAdministrator)
+        {
+            <form asp-action="TestConnection" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Project.Id" />
+                <button type="submit" class="btn btn-outline-secondary btn-sm">Test connection</button>
+            </form>
+            <a asp-action="Members" asp-route-id="@Model.Project.Id" class="btn btn-outline-secondary btn-sm">Users</a>
+            <a asp-action="Edit" asp-route-id="@Model.Project.Id" class="btn btn-outline-secondary btn-sm">Settings</a>
+        }
+    </div>
+</div>
+
+<div class="card">
+    <h2>Runs</h2>
+    <div class="card-body p-0">
+        @if (Model.Runs.Count == 0)
+        {
+            <div class="card-body"><span class="muted">No runs yet.</span></div>
+        }
+        else
+        {
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>Queued</th>
+                        <th>By</th>
+                        <th>Status</th>
+                        <th class="num">Tables</th>
+                        <th class="num">Files</th>
+                        <th>Issues</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var run in Model.Runs)
+                {
+                    <tr>
+                        <td>
+                            <a asp-controller="Runs" asp-action="Details" asp-route-id="@run.Id">
+                                @run.QueuedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                            </a>
+                            @if (run.ChangeRequestId is null)
+                            {
+                                <div class="small-muted">regenerate only</div>
+                            }
+                        </td>
+                        <td class="small-muted">@run.RequestedByUserName</td>
+                        <td><span class="pill pill-@run.Status.ToString().ToLowerInvariant()">@run.Status</span></td>
+                        <td class="num">@run.TableCount@(run.SkippedTableCount > 0 ? $" (+{run.SkippedTableCount} skipped)" : "")</td>
+                        <td class="num">@run.FileCount</td>
+                        <td class="small-muted">
+                            @if (run.ErrorCount > 0) { <span class="text-danger">@run.ErrorCount error(s)</span> }
+                            @if (run.WarningCount > 0) { <span class="ms-1">@run.WarningCount warning(s)</span> }
+                        </td>
+                        <td class="text-end">
+                            @if (run.ArtifactId is { } artifactId)
+                            {
+                                <a asp-controller="Runs" asp-action="Download" asp-route-id="@artifactId"
+                                   class="btn btn-sm btn-outline-primary">Download</a>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<div class="card">
+    <h2>SQL changes</h2>
+    <div class="card-body p-0">
+        @if (Model.Changes.Count == 0)
+        {
+            <div class="card-body"><span class="muted">No SQL has been applied through this project yet.</span></div>
+        }
+        else
+        {
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>Submitted</th>
+                        <th>By</th>
+                        <th>Title</th>
+                        <th>Result</th>
+                        <th class="num">Batches</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var change in Model.Changes)
+                {
+                    <tr>
+                        <td class="small-muted">@change.SubmittedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                        <td class="small-muted">@change.SubmittedByUserName</td>
+                        <td>@(string.IsNullOrWhiteSpace(change.Title) ? "—" : change.Title)</td>
+                        <td>
+                            @if (change.Status == ChangeRequestStatus.Applied)
+                            {
+                                <span class="pill pill-succeeded">applied</span>
+                            }
+                            else if (change.Status == ChangeRequestStatus.Failed)
+                            {
+                                <span class="pill pill-failed">failed</span>
+                                <div class="small-muted">@change.ErrorMessage</div>
+                            }
+                            else
+                            {
+                                <span class="pill pill-queued">pending</span>
+                            }
+                        </td>
+                        <td class="num">@change.BatchesExecuted</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@if (Model.IsAdministrator)
+{
+    <div class="card">
+        <h2>Danger zone</h2>
+        <div class="card-body">
+            <form asp-action="Delete" method="post"
+                  onsubmit="return confirm('Delete this project? Its run history and archives are kept.');">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Project.Id" />
+                <button type="submit" class="btn btn-outline-danger btn-sm">Delete project</button>
+                <span class="small-muted ms-2">
+                    Removes the project and its user assignments. The run history is kept as the audit record.
+                </span>
+            </form>
+        </div>
+    </div>
+}

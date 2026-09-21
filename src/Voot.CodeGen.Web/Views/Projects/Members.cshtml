@@ -1,0 +1,77 @@
+@model ProjectMembersViewModel
+@{
+    ViewData["Title"] = $"Users · {Model.Project.Name}";
+}
+
+<h1 class="h4 mb-1">Users on @Model.Project.Name</h1>
+<p class="small-muted mb-3">
+    Assigned users can submit SQL and download archives for this project.
+    Administrators reach every project without being assigned.
+</p>
+
+<div class="card">
+    <h2>Assigned</h2>
+    <div class="card-body p-0">
+        @if (Model.Members.Count == 0)
+        {
+            <div class="card-body"><span class="muted">Nobody is assigned yet.</span></div>
+        }
+        else
+        {
+            <table class="data">
+                <thead>
+                    <tr><th>User</th><th>Email</th><th>Assigned</th><th></th></tr>
+                </thead>
+                <tbody>
+                @foreach (var member in Model.Members)
+                {
+                    <tr>
+                        <td>@member.UserName</td>
+                        <td class="small-muted">@member.Email</td>
+                        <td class="small-muted">@member.AssignedUtc.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                        <td class="text-end">
+                            <form asp-action="RemoveMember" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@Model.Project.Id" />
+                                <input type="hidden" name="userId" value="@member.UserId" />
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<div class="card">
+    <h2>Assign a user</h2>
+    <div class="card-body">
+        @if (Model.Available.Count == 0)
+        {
+            <span class="muted">Every active account is already assigned.</span>
+        }
+        else
+        {
+            <form asp-action="AddMember" method="post" class="d-flex gap-2 align-items-end">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Project.Id" />
+                <div class="flex-grow-1">
+                    <label class="form-label" for="userId">User</label>
+                    <select name="userId" id="userId" class="form-select">
+                        @foreach (var user in Model.Available)
+                        {
+                            <option value="@user.Id">
+                                @user.DisplayName (@user.UserName)@(user.IsAdministrator ? " — administrator" : "")
+                            </option>
+                        }
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Assign</button>
+            </form>
+        }
+    </div>
+</div>
+
+<a asp-action="Details" asp-route-id="@Model.Project.Id" class="btn btn-link">Back to project</a>

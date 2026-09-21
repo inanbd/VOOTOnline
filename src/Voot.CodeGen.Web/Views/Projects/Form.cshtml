@@ -1,0 +1,171 @@
+@model ProjectFormViewModel
+@{
+    ViewData["Title"] = Model.IsEdit ? "Edit project" : "New project";
+}
+
+<h1 class="h4 mb-3">@ViewData["Title"]</h1>
+
+<form asp-action="@(Model.IsEdit ? "Edit" : "Create")" asp-route-id="@Model.Id" method="post">
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+    <div class="card">
+        <h2>Target database</h2>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Name" class="form-label"></label>
+                    <input asp-for="Name" class="form-control" />
+                    <span asp-validation-for="Name" class="text-danger"></span>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Description" class="form-label"></label>
+                    <input asp-for="Description" class="form-control" />
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="ConnectionString" class="form-label"></label>
+                <input asp-for="ConnectionString" class="form-control mono" autocomplete="off"
+                       placeholder="Server=...;Database=...;User ID=...;Password=..." />
+                @if (Model.IsEdit)
+                {
+                    <div class="form-text">
+                        Currently <span class="mono">@Model.ConnectionStringSummary</span>.
+                        Leave blank to keep it.
+                    </div>
+                }
+                else
+                {
+                    <div class="form-text">
+                        Stored encrypted. Submitted SQL runs against this database, so it should
+                        point at a development or staging server, not production.
+                    </div>
+                }
+                <span asp-validation-for="ConnectionString" class="text-danger"></span>
+            </div>
+
+            @if (Model.IsEdit)
+            {
+                <div class="form-check">
+                    <input asp-for="IsActive" class="form-check-input" />
+                    <label asp-for="IsActive" class="form-check-label"></label>
+                    <div class="form-text">Inactive projects reject new SQL submissions.</div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Output</h2>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Style</label>
+                    <select asp-for="Settings.OutputStyle" class="form-select"
+                            asp-items="Html.GetEnumSelectList<OutputStyle>()"></select>
+                    <div class="form-text">
+                        Legacy matches the original templates. Modern uses Microsoft.Data.SqlClient,
+                        file-scoped namespaces and nullable reference types.
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label asp-for="Settings.RootBase" class="form-label">Root namespace / folder</label>
+                    <input asp-for="Settings.RootBase" class="form-control mono" />
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label asp-for="Settings.TablePrefix" class="form-label">Table prefix to strip</label>
+                    <input asp-for="Settings.TablePrefix" class="form-control mono" />
+                </div>
+            </div>
+
+            <div class="settings-grid">
+                <div>
+                    <label asp-for="Settings.EntityProjectBase" class="form-label">Entities folder</label>
+                    <input asp-for="Settings.EntityProjectBase" class="form-control form-control-sm mono" />
+                </div>
+                <div>
+                    <label asp-for="Settings.EntityBase" class="form-label">Entity bases folder</label>
+                    <input asp-for="Settings.EntityBase" class="form-control form-control-sm mono" />
+                </div>
+                <div>
+                    <label asp-for="Settings.EntityListBase" class="form-label">Lists folder</label>
+                    <input asp-for="Settings.EntityListBase" class="form-control form-control-sm mono" />
+                </div>
+                <div>
+                    <label asp-for="Settings.DataAccessProjectBase" class="form-label">Data access folder</label>
+                    <input asp-for="Settings.DataAccessProjectBase" class="form-control form-control-sm mono" />
+                </div>
+                <div>
+                    <label asp-for="Settings.BusinessLogicProjectBase" class="form-label">Business logic folder</label>
+                    <input asp-for="Settings.BusinessLogicProjectBase" class="form-control form-control-sm mono" />
+                </div>
+                <div>
+                    <label asp-for="Settings.StoreProcedureBase" class="form-label">Procedures folder</label>
+                    <input asp-for="Settings.StoreProcedureBase" class="form-control form-control-sm mono" />
+                </div>
+                <div>
+                    <label asp-for="Settings.FrameworkBase" class="form-label">Framework namespace</label>
+                    <input asp-for="Settings.FrameworkBase" class="form-control form-control-sm mono" />
+                </div>
+                <div>
+                    <label asp-for="Settings.ExceptionBase" class="form-label">Exceptions namespace</label>
+                    <input asp-for="Settings.ExceptionBase" class="form-control form-control-sm mono" />
+                </div>
+                <div>
+                    <label asp-for="Settings.ContextName" class="form-label">Context type</label>
+                    <input asp-for="Settings.ContextName" class="form-control form-control-sm mono" />
+                </div>
+                <div>
+                    <label asp-for="Settings.RootNamespace" class="form-label">Data contract namespace</label>
+                    <input asp-for="Settings.RootNamespace" class="form-control form-control-sm mono" />
+                </div>
+                <div>
+                    <label asp-for="Settings.ProcedurePrefix" class="form-label">Procedure prefix</label>
+                    <input asp-for="Settings.ProcedurePrefix" class="form-control form-control-sm mono" />
+                </div>
+                <div>
+                    <label asp-for="Settings.OrderByExpression" class="form-label">Select-all ORDER BY</label>
+                    <input asp-for="Settings.OrderByExpression" class="form-control form-control-sm mono" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Procedures to generate</h2>
+        <div class="card-body">
+            <div class="settings-grid">
+                <div class="form-check"><input asp-for="Settings.IncludeInsert" class="form-check-input" /><label asp-for="Settings.IncludeInsert" class="form-check-label">Insert</label></div>
+                <div class="form-check"><input asp-for="Settings.IncludeUpdate" class="form-check-input" /><label asp-for="Settings.IncludeUpdate" class="form-check-label">Update</label></div>
+                <div class="form-check"><input asp-for="Settings.IncludeDelete" class="form-check-input" /><label asp-for="Settings.IncludeDelete" class="form-check-label">Delete</label></div>
+                <div class="form-check"><input asp-for="Settings.IncludeSelect" class="form-check-input" /><label asp-for="Settings.IncludeSelect" class="form-check-label">Select by key</label></div>
+                <div class="form-check"><input asp-for="Settings.IncludeSelectAll" class="form-check-input" /><label asp-for="Settings.IncludeSelectAll" class="form-check-label">Select all</label></div>
+                <div class="form-check"><input asp-for="Settings.IncludeSelectPaged" class="form-check-input" /><label asp-for="Settings.IncludeSelectPaged" class="form-check-label">Select paged</label></div>
+                <div class="form-check"><input asp-for="Settings.IncludeSelectByForeignKey" class="form-check-input" /><label asp-for="Settings.IncludeSelectByForeignKey" class="form-check-label">Select by foreign key</label></div>
+                <div class="form-check"><input asp-for="Settings.IncludeDeleteByForeignKey" class="form-check-input" /><label asp-for="Settings.IncludeDeleteByForeignKey" class="form-check-label">Delete by foreign key</label></div>
+                <div class="form-check"><input asp-for="Settings.IncludeSelectByQuery" class="form-check-input" /><label asp-for="Settings.IncludeSelectByQuery" class="form-check-label">Select by query</label></div>
+                <div class="form-check"><input asp-for="Settings.IncludeMaxAndRowCount" class="form-check-input" /><label asp-for="Settings.IncludeMaxAndRowCount" class="form-check-label">Max key and row count</label></div>
+                <div class="form-check"><input asp-for="Settings.IncludeDropStatements" class="form-check-input" /><label asp-for="Settings.IncludeDropStatements" class="form-check-label">Emit DROP guards</label></div>
+                <div class="form-check"><input asp-for="Settings.UseTransactionForSql" class="form-check-input" /><label asp-for="Settings.UseTransactionForSql" class="form-check-label">Run submitted SQL in a transaction</label></div>
+            </div>
+            <div class="form-text mt-2">
+                Some DDL cannot run inside a transaction. Turn the transaction off for those scripts,
+                accepting that a failure part way through leaves earlier batches applied.
+            </div>
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">@(Model.IsEdit ? "Save project" : "Create project")</button>
+    @if (Model.IsEdit)
+    {
+        <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-link">Cancel</a>
+    }
+    else
+    {
+        <a asp-controller="Home" asp-action="Index" class="btn btn-link">Cancel</a>
+    }
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

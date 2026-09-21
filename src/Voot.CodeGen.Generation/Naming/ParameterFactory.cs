@@ -1,3 +1,4 @@
+using System.Globalization;
 using Voot.CodeGen.Domain.Schema;
 
 namespace Voot.CodeGen.Generation.Naming;
@@ -22,11 +23,15 @@ public static class ParameterFactory
 
         if (column.HasPrecision)
         {
-            return column.Precision > 0 ? $"{column.Precision}, " : string.Empty;
+            return column.Precision > 0
+                ? string.Create(CultureInfo.InvariantCulture, $"{column.Precision}, ")
+                : string.Empty;
         }
 
         // MAX columns pass no size, matching the original templates.
-        return column.IsMaxLength || column.Size <= 0 ? string.Empty : $"{column.Size}, ";
+        return column.IsMaxLength || column.Size <= 0
+            ? string.Empty
+            : string.Create(CultureInfo.InvariantCulture, $"{column.Size}, ");
     }
 
     /// <summary>

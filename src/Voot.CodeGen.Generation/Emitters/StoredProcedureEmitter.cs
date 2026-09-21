@@ -70,7 +70,12 @@ public sealed class StoredProcedureEmitter : EmitterBase
 
         if (!isMapping && settings.IncludeMaxAndRowCount)
         {
-            WriteMax(writer, table, context, primaryKey);
+            // A maximum only makes sense for a numeric key.
+            if (SqlTypeMap.SupportsMaximumKey(primaryKey))
+            {
+                WriteMax(writer, table, context, primaryKey);
+            }
+
             WriteRowCount(writer, table, context);
         }
 
@@ -433,8 +438,9 @@ public sealed class StoredProcedureEmitter : EmitterBase
         writer.Line("\t\tORDER BY [' + @SortColumn + N'] ' + @SortOrder + N'");
         writer.Line("\t\tOFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY';");
         writer.Blank();
-        writer.Line("\tEXEC sp_executesql @Sql, N'@Skip int, @Take int',");
-        writer.Line("\t\t@Skip = @PageIndex * @RowPerPage, @Take = @RowPerPage;");
+        // sp_executesql takes variables, not expressions, so the offset is computed first.
+        writer.Line("\tDECLARE @Skip int = @PageIndex * @RowPerPage;");
+        writer.Line("\tEXEC sp_executesql @Sql, N'@Skip int, @Take int', @Skip = @Skip, @Take = @RowPerPage;");
         writer.Blank();
         writer.Line("\tRETURN @@ROWCOUNT;");
         writer.Line("END");

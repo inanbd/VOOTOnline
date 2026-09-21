@@ -1,3 +1,4 @@
+using System.Globalization;
 using Voot.CodeGen.Domain.Generation;
 using Voot.CodeGen.Domain.Schema;
 
@@ -191,6 +192,15 @@ public static class SqlTypeMap
         }
     };
 
+    /// <summary>
+    /// True when a key column is numeric, so a "maximum key" procedure can default to zero.
+    /// A uniqueidentifier or string key has no meaningful maximum, and ISNULL(MAX(x), 0)
+    /// against one is an operand type clash, so the procedure is skipped for those.
+    /// </summary>
+    public static bool SupportsMaximumKey(ColumnModel column) =>
+        TryGet(column.NativeType) is { SqlType: SqlDataType.BigInt or SqlDataType.Int or SqlDataType.SmallInt
+            or SqlDataType.TinyInt or SqlDataType.Decimal or SqlDataType.Money or SqlDataType.SmallMoney };
+
     /// <summary>True when the native type has a mapping; unknown types raise a diagnostic.</summary>
     public static bool IsKnown(string nativeType) => Map.ContainsKey(nativeType);
 
@@ -240,13 +250,15 @@ public static class SqlTypeMap
 
         if (column.HasLength)
         {
-            var length = column.IsMaxLength ? "max" : column.Size.ToString();
+            // Emitted SQL must not depend on the server's locale.
+            var length = column.IsMaxLength ? "max" : column.Size.ToString(CultureInfo.InvariantCulture);
             return $"{info.SqlParameterType}({length})";
         }
 
         if (column.HasPrecision)
         {
-            return $"{info.SqlParameterType}({column.Precision}, {column.Scale})";
+            return string.Create(CultureInfo.InvariantCulture,
+                $"{info.SqlParameterType}({column.Precision}, {column.Scale})");
         }
 
         return info.SqlParameterType;

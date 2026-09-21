@@ -1,8 +1,95 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+@model IReadOnlyList<ProjectListItemViewModel>
+@{
+    ViewData["Title"] = "Projects";
+    var isAdmin = User.IsInRole(RoleNames.Administrator);
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h4 mb-0">Projects</h1>
+    @if (isAdmin)
+    {
+        <a asp-controller="Projects" asp-action="Create" class="btn btn-primary btn-sm">New project</a>
+    }
 </div>
+
+@if (Model.Count == 0)
+{
+    <div class="card">
+        <div class="card-body">
+            @if (isAdmin)
+            {
+                <p class="mb-2">No projects yet.</p>
+                <p class="small-muted mb-3">
+                    A project points at one SQL Server database and holds the generator settings used for it.
+                </p>
+                <a asp-controller="Projects" asp-action="Create" class="btn btn-primary">Create the first project</a>
+            }
+            else
+            {
+                <p class="mb-1">You are not assigned to any projects yet.</p>
+                <p class="small-muted mb-0">An administrator can assign you to one.</p>
+            }
+        </div>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body p-0">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>Project</th>
+                        <th>Target database</th>
+                        <th>Last run</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td>
+                            <a asp-controller="Projects" asp-action="Details" asp-route-id="@item.Project.Id">
+                                @item.Project.Name
+                            </a>
+                            @if (!item.Project.IsActive)
+                            {
+                                <span class="pill pill-inactive ms-1">inactive</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(item.Project.Description))
+                            {
+                                <div class="small-muted">@item.Project.Description</div>
+                            }
+                        </td>
+                        <td class="small-muted mono">@item.Project.ConnectionStringSummary</td>
+                        <td class="small-muted">
+                            @if (item.LatestRun is null)
+                            {
+                                <span>never</span>
+                            }
+                            else
+                            {
+                                <span>@item.LatestRun.QueuedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                            }
+                        </td>
+                        <td>
+                            @if (item.LatestRun is not null)
+                            {
+                                <span class="pill pill-@item.LatestRun.Status.ToString().ToLowerInvariant()">
+                                    @item.LatestRun.Status
+                                </span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <a asp-controller="Runs" asp-action="Submit" asp-route-projectId="@item.Project.Id"
+                               class="btn btn-sm btn-outline-primary">Apply SQL</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

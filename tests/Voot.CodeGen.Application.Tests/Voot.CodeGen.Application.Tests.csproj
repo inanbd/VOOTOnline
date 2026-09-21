@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\Voot.CodeGen.Application\Voot.CodeGen.Application.csproj" />
     <ProjectReference Include="..\..\src\Voot.CodeGen.Domain\Voot.CodeGen.Domain.csproj" />
     <ProjectReference Include="..\..\src\Voot.CodeGen.Generation\Voot.CodeGen.Generation.csproj" />
+    <ProjectReference Include="..\..\src\Voot.CodeGen.Infrastructure\Voot.CodeGen.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

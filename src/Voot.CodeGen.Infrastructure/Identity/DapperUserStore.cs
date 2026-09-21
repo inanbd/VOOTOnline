@@ -29,6 +29,17 @@ public sealed class DapperUserStore(ISqlConnectionFactory connectionFactory) :
         [DisplayName], [IsActive], [CreatedUtc]
         """;
 
+    /// <summary>
+    /// The same list qualified with the user alias. Queries that join roles or claims must use
+    /// this: those tables also have an [Id], so an unqualified list is ambiguous.
+    /// </summary>
+    private const string UserColumns = """
+        u.[Id], u.[UserName], u.[NormalizedUserName], u.[Email], u.[NormalizedEmail], u.[EmailConfirmed],
+        u.[PasswordHash], u.[SecurityStamp], u.[ConcurrencyStamp], u.[PhoneNumber], u.[PhoneNumberConfirmed],
+        u.[TwoFactorEnabled], u.[LockoutEnd], u.[LockoutEnabled], u.[AccessFailedCount],
+        u.[DisplayName], u.[IsActive], u.[CreatedUtc]
+        """;
+
     // ---- IUserStore -------------------------------------------------------------------
 
     public async Task<IdentityResult> CreateAsync(ApplicationUser user, CancellationToken cancellationToken)
@@ -349,7 +360,7 @@ public sealed class DapperUserStore(ISqlConnectionFactory connectionFactory) :
 
         var rows = await connection.QueryAsync<ApplicationUser>(new CommandDefinition(
             $"""
-            SELECT {Columns} FROM [dbo].[AspNetUsers] u
+            SELECT {UserColumns} FROM [dbo].[AspNetUsers] u
             INNER JOIN [dbo].[AspNetUserRoles] ur ON ur.[UserId] = u.[Id]
             INNER JOIN [dbo].[AspNetRoles] r ON r.[Id] = ur.[RoleId]
             WHERE r.[NormalizedName] = @roleName;
@@ -426,7 +437,7 @@ public sealed class DapperUserStore(ISqlConnectionFactory connectionFactory) :
 
         var rows = await connection.QueryAsync<ApplicationUser>(new CommandDefinition(
             $"""
-            SELECT {Columns} FROM [dbo].[AspNetUsers] u
+            SELECT {UserColumns} FROM [dbo].[AspNetUsers] u
             INNER JOIN [dbo].[AspNetUserClaims] uc ON uc.[UserId] = u.[Id]
             WHERE uc.[ClaimType] = @claimType AND uc.[ClaimValue] = @claimValue;
             """,

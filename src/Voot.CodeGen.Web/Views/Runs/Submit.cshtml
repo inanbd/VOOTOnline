@@ -1,0 +1,50 @@
+@model SubmitChangeViewModel
+@{
+    ViewData["Title"] = $"Apply SQL · {Model.ProjectName}";
+}
+
+<h1 class="h4 mb-1">Apply SQL to @Model.ProjectName</h1>
+<p class="small-muted mb-3">
+    This runs against <span class="mono">@Model.ConnectionStringSummary</span>.
+    @if (Model.UsesTransaction)
+    {
+        <text>All batches run in one transaction and roll back together if any fails.</text>
+    }
+    else
+    {
+        <text><strong>Transactions are off for this project</strong>, so a failure part way through leaves earlier batches applied.</text>
+    }
+    Once it succeeds the schema is re-read and the whole data layer is regenerated.
+</p>
+
+<form asp-action="Submit" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="ProjectId" />
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="mb-3">
+                <label asp-for="Title" class="form-label"></label>
+                <input asp-for="Title" class="form-control" placeholder="Add IsArchived to Invoice" />
+            </div>
+
+            <div class="mb-2">
+                <label asp-for="SqlText" class="form-label"></label>
+                <textarea asp-for="SqlText" class="form-control sql" spellcheck="false"
+                          placeholder="ALTER TABLE dbo.tbl_Invoice ADD IsArchived bit NOT NULL DEFAULT (0);&#10;GO"></textarea>
+                <div class="form-text">
+                    <code>GO</code> batch separators are supported. The script is kept permanently as the audit record.
+                </div>
+                <span asp-validation-for="SqlText" class="text-danger"></span>
+            </div>
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Apply and regenerate</button>
+    <a asp-controller="Projects" asp-action="Details" asp-route-id="@Model.ProjectId" class="btn btn-link">Cancel</a>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
