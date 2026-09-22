@@ -20,8 +20,14 @@ public sealed record SchemaViewModel
     /// <summary>Set after SQL was run from this page; null on a plain view.</summary>
     public SchemaChangeResult? LastChange { get; init; }
 
-    /// <summary>Recent SQL changes for this project, newest first.</summary>
-    public IReadOnlyList<ChangeRequest> RecentChanges { get; init; } = [];
+    /// <summary>SQL changes and deployment moves merged newest-first, for the timeline.</summary>
+    public IReadOnlyList<TimelineEntry> Timeline { get; init; } = [];
+
+    /// <summary>The combined script still outstanding for development.</summary>
+    public PendingScript? DevPending { get; init; }
+
+    /// <summary>The combined script still outstanding for production.</summary>
+    public PendingScript? ProductionPending { get; init; }
 
     /// <summary>The SQL to put back in the editor after a failed run, so it is not lost.</summary>
     public string? SqlText { get; init; }

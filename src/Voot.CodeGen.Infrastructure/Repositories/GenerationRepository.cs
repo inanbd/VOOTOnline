@@ -19,11 +19,15 @@ public sealed class GenerationRepository(ISqlConnectionFactory connectionFactory
             INSERT INTO [dbo].[ChangeRequests]
                 ([Id], [ProjectId], [SubmittedByUserId], [SubmittedByUserName], [Title], [SqlText],
                  [Status], [SubmittedUtc], [AppliedUtc], [BatchesExecuted], [RowsAffected],
-                 [ErrorMessage], [ErrorNumber], [ErrorLineNumber], [StructureSummary])
+                 [ErrorMessage], [ErrorNumber], [ErrorLineNumber], [StructureSummary],
+                 [DeployedToDevUtc], [DeployedToDevByUserName],
+                 [DeployedToProductionUtc], [DeployedToProductionByUserName])
             VALUES
                 (@Id, @ProjectId, @SubmittedByUserId, @SubmittedByUserName, @Title, @SqlText,
                  @Status, @SubmittedUtc, @AppliedUtc, @BatchesExecuted, @RowsAffected,
-                 @ErrorMessage, @ErrorNumber, @ErrorLineNumber, @StructureSummary);
+                 @ErrorMessage, @ErrorNumber, @ErrorLineNumber, @StructureSummary,
+                 @DeployedToDevUtc, @DeployedToDevByUserName,
+                 @DeployedToProductionUtc, @DeployedToProductionByUserName);
             """,
             request,
             cancellationToken: cancellationToken));
@@ -70,6 +74,121 @@ public sealed class GenerationRepository(ISqlConnectionFactory connectionFactory
             SELECT TOP (@take) * FROM [dbo].[ChangeRequests]
             WHERE [ProjectId] = @projectId
             ORDER BY [SubmittedUtc] DESC;
+            """,
+            new { projectId, take },
+            cancellationToken: cancellationToken));
+
+        return [.. rows];
+    }
+
+    public async Task SetDeploymentAsync(
+        Guid changeRequestId,
+        DeploymentEnvironment environment,
+        bool deployed,
+        string userId,
+        string? userName,
+        DateTimeOffset markedUtc,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            // The column pair is chosen here rather than interpolated, so the environment value
+            // can never reach the statement text.
+            var sql = environment == DeploymentEnvironment.Development
+                ? """
+                  UPDATE [dbo].[ChangeRequests]
+                  SET [DeployedToDevUtc] = @utc, [DeployedToDevByUserName] = @userName
+                  WHERE [Id] = @changeRequestId;
+                  """
+                : """
+                  UPDATE [dbo].[ChangeRequests]
+                  SET [DeployedToProductionUtc] = @utc, [DeployedToProductionByUserName] = @userName
+                  WHERE [Id] = @changeRequestId;
+                  """;
+
+            await connection.ExecuteAsync(new CommandDefinition(
+                sql,
+                new
+                {
+                    changeRequestId,
+                    utc = deployed ? markedUtc : (DateTimeOffset?)null,
+                    userName = deployed ? userName : null
+                },
+                transaction,
+                cancellationToken: cancellationToken));
+
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
+                INSERT INTO [dbo].[ChangeDeployments]
+                    ([ChangeRequestId], [ProjectId], [Environment], [Action],
+                     [MarkedByUserId], [MarkedByUserName], [MarkedUtc], [ChangeTitle])
+                SELECT c.[Id], c.[ProjectId], @environment, @action,
+                       @userId, @userName, @markedUtc, c.[Title]
+                FROM [dbo].[ChangeRequests] c
+                WHERE c.[Id] = @changeRequestId;
+                """,
+                new
+                {
+                    changeRequestId,
+                    environment = (int)environment,
+                    action = (int)(deployed ? DeploymentAction.Marked : DeploymentAction.Unmarked),
+                    userId,
+                    userName,
+                    markedUtc
+                },
+                transaction,
+                cancellationToken: cancellationToken));
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyList<ChangeRequest>> GetPendingChangesAsync(
+        Guid projectId,
+        DeploymentEnvironment environment,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+
+        // Oldest first: the combined script has to replay in the order the changes were applied.
+        var sql = environment == DeploymentEnvironment.Development
+            ? """
+              SELECT * FROM [dbo].[ChangeRequests]
+              WHERE [ProjectId] = @projectId AND [Status] = @applied AND [DeployedToDevUtc] IS NULL
+              ORDER BY [AppliedUtc], [SubmittedUtc];
+              """
+            : """
+              SELECT * FROM [dbo].[ChangeRequests]
+              WHERE [ProjectId] = @projectId AND [Status] = @applied AND [DeployedToProductionUtc] IS NULL
+              ORDER BY [AppliedUtc], [SubmittedUtc];
+              """;
+
+        var rows = await connection.QueryAsync<ChangeRequest>(new CommandDefinition(
+            sql,
+            new { projectId, applied = (int)ChangeRequestStatus.Applied },
+            cancellationToken: cancellationToken));
+
+        return [.. rows];
+    }
+
+    public async Task<IReadOnlyList<ChangeDeployment>> GetDeploymentLogAsync(
+        Guid projectId, int take = 100, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+
+        var rows = await connection.QueryAsync<ChangeDeployment>(new CommandDefinition(
+            """
+            SELECT TOP (@take) * FROM [dbo].[ChangeDeployments]
+            WHERE [ProjectId] = @projectId
+            ORDER BY [MarkedUtc] DESC, [Id] DESC;
             """,
             new { projectId, take },
             cancellationToken: cancellationToken));

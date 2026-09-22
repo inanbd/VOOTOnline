@@ -44,4 +44,48 @@ public sealed class ChangeRequest
     /// Null for changes applied before this was captured.
     /// </summary>
     public string? StructureSummary { get; set; }
+
+    // ---- deployment trackers ----
+    // Set when someone marks the change as having reached that environment. Null means it is
+    // still outstanding there. Only an applied change can be marked: a failed script never ran,
+    // so replaying it elsewhere would be wrong.
+
+    public DateTimeOffset? DeployedToDevUtc { get; set; }
+
+    public string? DeployedToDevByUserName { get; set; }
+
+    public DateTimeOffset? DeployedToProductionUtc { get; set; }
+
+    public string? DeployedToProductionByUserName { get; set; }
+
+    public bool IsAppliedSuccessfully => Status == ChangeRequestStatus.Applied;
+
+    /// <summary>True when the change has been marked as reaching the given environment.</summary>
+    public bool IsDeployedTo(DeploymentEnvironment environment) => environment switch
+    {
+        DeploymentEnvironment.Development => DeployedToDevUtc is not null,
+        DeploymentEnvironment.Production => DeployedToProductionUtc is not null,
+        _ => false
+    };
+
+    /// <summary>When the change was marked into the environment, or null if it has not been.</summary>
+    public DateTimeOffset? DeployedUtc(DeploymentEnvironment environment) => environment switch
+    {
+        DeploymentEnvironment.Development => DeployedToDevUtc,
+        DeploymentEnvironment.Production => DeployedToProductionUtc,
+        _ => null
+    };
+
+    public string? DeployedBy(DeploymentEnvironment environment) => environment switch
+    {
+        DeploymentEnvironment.Development => DeployedToDevByUserName,
+        DeploymentEnvironment.Production => DeployedToProductionByUserName,
+        _ => null
+    };
+
+    /// <summary>
+    /// True when the change has run here and still needs moving to the given environment.
+    /// </summary>
+    public bool IsPendingFor(DeploymentEnvironment environment) =>
+        IsAppliedSuccessfully && !IsDeployedTo(environment);
 }

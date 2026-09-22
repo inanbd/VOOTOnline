@@ -23,6 +23,12 @@ over SQL Server's catalog views. There is no CodeSmith dependency and no Entity 
   Every script is recorded in the project's change log with its outcome and a summary of what
   it changed. Running SQL here does not regenerate the code; that stays an explicit step, and
   the page links to it.
+- **Dev and production trackers.** Each applied change carries a checkbox per environment.
+  The page shows how many changes are still outstanding for each, combines them into one
+  replayable script in a copyable dialog, and can mark everything remaining in one click. Every
+  move — in or back out — is recorded with who did it and when.
+- **Timeline.** Changes and deployment moves are shown as one chronological timeline rather
+  than a flat table, so a change and its journey to production read together.
 - **Sample inserts.** Each table offers a ready-to-run `INSERT` with placeholder data, for one
   table or the whole selection, in a dialog with a copy button. Identity, computed and
   rowversion columns are left out because the server assigns them.

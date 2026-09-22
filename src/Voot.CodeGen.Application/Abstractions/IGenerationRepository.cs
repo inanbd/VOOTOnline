@@ -19,6 +19,29 @@ public interface IGenerationRepository
     Task<IReadOnlyList<ChangeRequest>> GetChangeRequestsAsync(
         Guid projectId, int take = 50, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Records a change moving into, or out of, an environment: updates the change's state and
+    /// appends to the deployment log in one transaction.
+    /// </summary>
+    Task SetDeploymentAsync(
+        Guid changeRequestId,
+        DeploymentEnvironment environment,
+        bool deployed,
+        string userId,
+        string? userName,
+        DateTimeOffset markedUtc,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Applied changes that have not yet been marked as reaching the environment, oldest first.</summary>
+    Task<IReadOnlyList<ChangeRequest>> GetPendingChangesAsync(
+        Guid projectId,
+        DeploymentEnvironment environment,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The history of deployment moves for a project, newest first.</summary>
+    Task<IReadOnlyList<ChangeDeployment>> GetDeploymentLogAsync(
+        Guid projectId, int take = 100, CancellationToken cancellationToken = default);
+
     // ---- runs ----
 
     Task AddRunAsync(GenerationRun run, CancellationToken cancellationToken = default);

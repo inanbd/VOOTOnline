@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Voot.CodeGen.Application.Abstractions;
 using Voot.CodeGen.Application.Services;
+using Microsoft.AspNetCore.Routing;
+using Voot.CodeGen.Domain.Generation;
 using Voot.CodeGen.Domain.Projects;
 using Voot.CodeGen.Generation.Naming;
 using Voot.CodeGen.Web.Security;
@@ -15,6 +17,7 @@ public sealed class ProjectsController(
     RunHistoryService history,
     SchemaBrowsingService schema,
     SchemaChangeService schemaChanges,
+    DeploymentTrackingService deployments,
     IUserDirectory users) : Controller
 {
     /// <summary>Project overview with its change and run history.</summary>
@@ -102,8 +105,65 @@ public sealed class ProjectsController(
             SelectedNames = all
                 ? [.. structure.Tables.Select(t => t.Name)]
                 : new HashSet<string>(selected, StringComparer.OrdinalIgnoreCase),
-            RecentChanges = await history.GetChangesAsync(id, 10, cancellationToken)
+            Timeline = await deployments.GetTimelineAsync(id, 40, cancellationToken),
+            DevPending = await deployments.GetPendingScriptAsync(id, DeploymentEnvironment.Development, cancellationToken),
+            ProductionPending = await deployments.GetPendingScriptAsync(id, DeploymentEnvironment.Production, cancellationToken)
         };
+
+    /// <summary>Marks a single change as reaching an environment, or takes it back out.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetDeployment(
+        Guid id,
+        Guid changeId,
+        DeploymentEnvironment environment,
+        bool deployed,
+        [FromForm(Name = "table")] string[]? tables,
+        bool all = false,
+        CancellationToken cancellationToken = default)
+    {
+        await deployments.SetAsync(id, changeId, environment, deployed, cancellationToken);
+
+        return RedirectToSchema(id, tables, all);
+    }
+
+    /// <summary>Marks every change still outstanding for an environment.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MarkAllDeployed(
+        Guid id,
+        DeploymentEnvironment environment,
+        [FromForm(Name = "table")] string[]? tables,
+        bool all = false,
+        CancellationToken cancellationToken = default)
+    {
+        var marked = await deployments.MarkAllPendingAsync(id, environment, cancellationToken);
+        var label = environment == DeploymentEnvironment.Development ? "development" : "production";
+
+        TempData["Status"] = marked == 0
+            ? $"Nothing was outstanding for {label}."
+            : $"Marked {marked} change(s) as reaching {label}.";
+
+        return RedirectToSchema(id, tables, all);
+    }
+
+    /// <summary>Returns to the schema page with the table selection intact.</summary>
+    private IActionResult RedirectToSchema(Guid id, string[]? tables, bool all)
+    {
+        if (all)
+        {
+            return RedirectToAction(nameof(Schema), new { id, all = true });
+        }
+
+        var route = new RouteValueDictionary { ["id"] = id };
+
+        if (tables is { Length: > 0 })
+        {
+            route["table"] = tables;
+        }
+
+        return RedirectToAction(nameof(Schema), route);
+    }
 
     [Authorize(Policy = AuthorizationPolicies.Administrator)]
     [HttpGet]

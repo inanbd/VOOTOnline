@@ -240,3 +240,80 @@ pre.sample-sql {
 }
 
 details summary { cursor: pointer; }
+
+/* ---- deployment trackers and timeline ---- */
+
+.tracker-actions { display: inline-flex; align-items: center; gap: .4rem; font-weight: 400; }
+.tracker-divider { width: 1px; height: 22px; background: var(--line); margin: 0 .2rem; }
+
+.count-badge {
+    display: inline-block;
+    min-width: 1.35rem;
+    padding: 0 .3rem;
+    border-radius: 999px;
+    background: #eef2f6;
+    color: var(--muted);
+    font-size: .74rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.count-badge.count-due { background: #fdeceb; color: var(--bad); }
+
+.timeline { list-style: none; margin: 0; padding: 0 0 0 1.25rem; position: relative; }
+
+.timeline::before {
+    content: "";
+    position: absolute;
+    left: .32rem;
+    top: .4rem;
+    bottom: .4rem;
+    width: 2px;
+    background: var(--line);
+}
+
+.tl-item { position: relative; padding: 0 0 1rem .9rem; }
+.tl-item:last-child { padding-bottom: 0; }
+
+.tl-dot {
+    position: absolute;
+    left: -1.02rem;
+    top: .35rem;
+    width: .62rem;
+    height: .62rem;
+    border-radius: 50%;
+    background: var(--muted);
+    box-shadow: 0 0 0 3px #fff;
+}
+
+.tl-change .tl-dot  { background: var(--accent); }
+.tl-failed .tl-dot  { background: var(--bad); }
+.tl-dev .tl-dot     { background: #6941c6; }
+.tl-prod .tl-dot    { background: var(--ok); }
+.tl-undo .tl-dot    { background: #fff; box-shadow: 0 0 0 2px var(--muted), 0 0 0 5px #fff; }
+.tl-undo .tl-title  { color: var(--muted); }
+
+.tl-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; font-size: .8rem; }
+.tl-when { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tl-who { color: var(--muted); }
+.tl-title { font-size: .92rem; margin-top: .1rem; }
+
+.tl-trackers { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .45rem; }
+
+.tracker {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .12rem .5rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #fff;
+    font-size: .78rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.tracker:hover { border-color: var(--accent); }
+.tracker input { margin: 0; cursor: pointer; }
+.tracker-on { background: #e6f4ea; border-color: #b7dfc3; color: var(--ok); font-weight: 600; }
+.tracker-meta { color: var(--muted); font-weight: 400; font-size: .74rem; }

@@ -179,51 +179,173 @@
     </div>
 </div>
 
-@if (Model.RecentChanges.Count > 0)
-{
-    <div class="card">
-        <h2>Change log</h2>
-        <div class="card-body p-0">
-            <table class="data">
-                <thead>
-                    <tr><th>When</th><th>By</th><th>Title</th><th>Result</th><th>Structure</th></tr>
-                </thead>
-                <tbody>
-                @foreach (var entry in Model.RecentChanges)
-                {
-                    <tr>
-                        <td class="small-muted">@entry.SubmittedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
-                        <td class="small-muted">@entry.SubmittedByUserName</td>
-                        <td>
-                            @(string.IsNullOrWhiteSpace(entry.Title) ? "—" : entry.Title)
-                            <details class="mt-1">
-                                <summary class="small-muted">SQL</summary>
-                                <pre class="detail">@entry.SqlText</pre>
-                            </details>
-                        </td>
-                        <td>
-                            @if (entry.Status == ChangeRequestStatus.Applied)
-                            {
-                                <span class="pill pill-succeeded">applied</span>
-                            }
-                            else if (entry.Status == ChangeRequestStatus.Failed)
-                            {
-                                <span class="pill pill-failed">failed</span>
-                                <div class="small-muted">@entry.ErrorMessage</div>
-                            }
-                            else
-                            {
-                                <span class="pill pill-queued">pending</span>
-                            }
-                        </td>
-                        <td class="small-muted">@(entry.StructureSummary ?? "—")</td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-        </div>
-    </div>
+@{
+    var devPending = Model.DevPending?.Count ?? 0;
+    var prodPending = Model.ProductionPending?.Count ?? 0;
 }
+
+<div class="card">
+    <h2 class="d-flex justify-content-between align-items-center">
+        <span>Timeline</span>
+        <span class="tracker-actions">
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    data-sample-for="__dev__" data-sample-title="Pending for development (@devPending change(s))">
+                Dev script
+                <span class="count-badge @(devPending > 0 ? "count-due" : "")">@devPending</span>
+            </button>
+            <form asp-action="MarkAllDeployed" asp-route-id="@project.Id" method="post" class="d-inline"
+                  onsubmit="return confirm('Mark all @devPending outstanding change(s) as reaching development?');">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="environment" value="@DeploymentEnvironment.Development" />
+                <input type="hidden" name="all" value="@Model.SelectAll.ToString().ToLowerInvariant()" />
+                @foreach (var name in Model.SelectedNames)
+                {
+                    <input type="hidden" name="table" value="@name" />
+                }
+                <button type="submit" class="btn btn-outline-secondary btn-sm" disabled="@(devPending == 0)">
+                    Mark all dev
+                </button>
+            </form>
+
+            <span class="tracker-divider"></span>
+
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    data-sample-for="__prod__" data-sample-title="Pending for production (@prodPending change(s))">
+                Production script
+                <span class="count-badge @(prodPending > 0 ? "count-due" : "")">@prodPending</span>
+            </button>
+            <form asp-action="MarkAllDeployed" asp-route-id="@project.Id" method="post" class="d-inline"
+                  onsubmit="return confirm('Mark all @prodPending outstanding change(s) as reaching production?');">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="environment" value="@DeploymentEnvironment.Production" />
+                <input type="hidden" name="all" value="@Model.SelectAll.ToString().ToLowerInvariant()" />
+                @foreach (var name in Model.SelectedNames)
+                {
+                    <input type="hidden" name="table" value="@name" />
+                }
+                <button type="submit" class="btn btn-outline-secondary btn-sm" disabled="@(prodPending == 0)">
+                    Mark all production
+                </button>
+            </form>
+        </span>
+    </h2>
+    <div class="card-body">
+        @if (Model.Timeline.Count == 0)
+        {
+            <span class="muted">Nothing has happened on this project yet.</span>
+        }
+        else
+        {
+            <ol class="timeline">
+                @foreach (var entry in Model.Timeline)
+                {
+                    if (entry.Change is { } c)
+                    {
+                        var applied = c.Status == ChangeRequestStatus.Applied;
+                        <li class="tl-item @(applied ? "tl-change" : "tl-failed")">
+                            <span class="tl-dot" aria-hidden="true"></span>
+                            <div class="tl-body">
+                                <div class="tl-head">
+                                    <span class="tl-when">@c.SubmittedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                                    <span class="tl-who">@c.SubmittedByUserName</span>
+                                    @if (applied)
+                                    {
+                                        <span class="pill pill-succeeded">applied</span>
+                                    }
+                                    else if (c.Status == ChangeRequestStatus.Failed)
+                                    {
+                                        <span class="pill pill-failed">failed</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="pill pill-queued">pending</span>
+                                    }
+                                </div>
+
+                                <div class="tl-title">
+                                    @(string.IsNullOrWhiteSpace(c.Title) ? "SQL change" : c.Title)
+                                    @if (!string.IsNullOrWhiteSpace(c.StructureSummary))
+                                    {
+                                        <span class="small-muted">&middot; @c.StructureSummary</span>
+                                    }
+                                </div>
+
+                                @if (c.Status == ChangeRequestStatus.Failed)
+                                {
+                                    <div class="small text-danger">@c.ErrorMessage</div>
+                                }
+
+                                @if (applied)
+                                {
+                                    <div class="tl-trackers">
+                                        @foreach (var env in new[] { DeploymentEnvironment.Development, DeploymentEnvironment.Production })
+                                        {
+                                            var on = c.IsDeployedTo(env);
+                                            var label = env == DeploymentEnvironment.Development ? "Dev" : "Production";
+                                            var boxId = $"dep-{c.Id}-{env}";
+                                            <form asp-action="SetDeployment" asp-route-id="@project.Id" method="post"
+                                                  class="tracker-form d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="changeId" value="@c.Id" />
+                                                <input type="hidden" name="environment" value="@env" />
+                                                <input type="hidden" name="deployed" value="@((!on).ToString().ToLowerInvariant())" />
+                                                <input type="hidden" name="all" value="@Model.SelectAll.ToString().ToLowerInvariant()" />
+                                                @foreach (var name in Model.SelectedNames)
+                                                {
+                                                    <input type="hidden" name="table" value="@name" />
+                                                }
+                                                <label class="tracker @(on ? "tracker-on" : "")" for="@boxId">
+                                                    <input type="checkbox" id="@boxId" checked="@on" />
+                                                    <span>@label</span>
+                                                    @if (on)
+                                                    {
+                                                        <span class="tracker-meta">
+                                                            @c.DeployedUtc(env)!.Value.ToLocalTime().ToString("MMM d")
+                                                            @if (!string.IsNullOrWhiteSpace(c.DeployedBy(env)))
+                                                            {
+                                                                <span>&middot; @c.DeployedBy(env)</span>
+                                                            }
+                                                        </span>
+                                                    }
+                                                </label>
+                                            </form>
+                                        }
+                                    </div>
+                                }
+
+                                <details class="mt-1">
+                                    <summary class="small-muted">SQL</summary>
+                                    <pre class="detail">@c.SqlText</pre>
+                                </details>
+                            </div>
+                        </li>
+                    }
+                    else if (entry.Deployment is { } d)
+                    {
+                        var toProd = d.Environment == DeploymentEnvironment.Production;
+                        var undone = d.Action == DeploymentAction.Unmarked;
+                        <li class="tl-item @(toProd ? "tl-prod" : "tl-dev") @(undone ? "tl-undo" : "")">
+                            <span class="tl-dot" aria-hidden="true"></span>
+                            <div class="tl-body">
+                                <div class="tl-head">
+                                    <span class="tl-when">@d.MarkedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                                    <span class="tl-who">@d.MarkedByUserName</span>
+                                </div>
+                                <div class="tl-title">
+                                    @(undone ? "Taken back out of " : "Moved to ")@(toProd ? "production" : "development")
+                                    @if (!string.IsNullOrWhiteSpace(d.ChangeTitle))
+                                    {
+                                        <span class="small-muted">&middot; @d.ChangeTitle</span>
+                                    }
+                                </div>
+                            </div>
+                        </li>
+                    }
+                }
+            </ol>
+        }
+    </div>
+</div>
 
 <div class="row">
     <div class="col-lg-3">
@@ -417,18 +539,32 @@
     </div>
 </div>
 
-@if (Model.HasSelection)
-{
-    @* Payloads for the modal. Rendered as escaped text and read back with textContent, so a
-       table or column name cannot break out of the markup. *@
-    <div class="d-none" id="sample-store">
-        @foreach (var table in Model.Structure.Selected)
-        {
-            <pre data-sample="@table.Name">@SampleInsertBuilder.Build(table)</pre>
-        }
+@* Payloads for the modal. Rendered as escaped text and read back with textContent, so a
+   table name, column name or script cannot break out of the markup. *@
+<div class="d-none" id="sample-store">
+    @foreach (var table in Model.Structure.Selected)
+    {
+        <pre data-sample="@table.Name">@SampleInsertBuilder.Build(table)</pre>
+    }
+    @if (Model.HasSelection)
+    {
         <pre data-sample="__all__">@SampleInsertBuilder.Build(Model.Structure.Selected)</pre>
-    </div>
+    }
+    @if (Model.DevPending is { } devScript)
+    {
+        <pre data-sample="__dev__">@devScript.Sql</pre>
+    }
+    @if (Model.ProductionPending is { } prodScript)
+    {
+        <pre data-sample="__prod__">@prodScript.Sql</pre>
+    }
+</div>
 
+@{
+    var modalBlock = true;
+}
+@if (modalBlock)
+{
     <div class="modal fade" id="sample-modal" tabindex="-1" aria-labelledby="sample-modal-title" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
@@ -474,6 +610,16 @@
             filter.addEventListener('input', function () {
                 const term = filter.value.trim().toLowerCase();
                 rows.forEach(r => { r.hidden = term.length > 0 && !r.dataset.name.includes(term); });
+            });
+        })();
+
+        // A tracker checkbox submits its own form, so the pending counts and the timeline
+        // refresh together rather than drifting out of step with the server.
+        (function () {
+            document.querySelectorAll('.tracker-form input[type=checkbox]').forEach(function (box) {
+                box.addEventListener('change', function () {
+                    box.closest('form').submit();
+                });
             });
         })();
 
