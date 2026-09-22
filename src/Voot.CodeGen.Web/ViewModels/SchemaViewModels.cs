@@ -1,12 +1,13 @@
 using Voot.CodeGen.Application.Models;
 using Voot.CodeGen.Application.Services;
+using Voot.CodeGen.Domain.Generation;
 using Voot.CodeGen.Domain.Schema;
 using Voot.CodeGen.Generation.Naming;
 
 namespace Voot.CodeGen.Web.ViewModels;
 
 /// <summary>What the schema browser renders: the picker plus the selected tables' structure.</summary>
-public sealed class SchemaViewModel
+public sealed record SchemaViewModel
 {
     public required SchemaStructure Structure { get; init; }
 
@@ -15,6 +16,17 @@ public sealed class SchemaViewModel
 
     /// <summary>Table names currently ticked, used to render the checkbox state.</summary>
     public required HashSet<string> SelectedNames { get; init; }
+
+    /// <summary>Set after SQL was run from this page; null on a plain view.</summary>
+    public SchemaChangeResult? LastChange { get; init; }
+
+    /// <summary>Recent SQL changes for this project, newest first.</summary>
+    public IReadOnlyList<ChangeRequest> RecentChanges { get; init; } = [];
+
+    /// <summary>The SQL to put back in the editor after a failed run, so it is not lost.</summary>
+    public string? SqlText { get; init; }
+
+    public string? Title { get; init; }
 
     public bool SelectAll => Structure.SelectAll;
 

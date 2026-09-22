@@ -64,6 +64,7 @@ public static class DependencyInjection
         services.AddScoped<ChangeSubmissionService>();
         services.AddScoped<RunHistoryService>();
         services.AddScoped<SchemaBrowsingService>();
+        services.AddScoped<SchemaChangeService>();
         services.AddScoped<ArtifactDownloadService>();
         services.AddScoped<GenerationPipeline>();
 

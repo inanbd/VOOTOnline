@@ -203,3 +203,40 @@ table.schema-columns td, table.schema-columns th { padding: .35rem .75rem; }
     color: var(--muted);
     margin-bottom: .25rem;
 }
+
+/* ---- SQL runner, diff and sample inserts ---- */
+
+textarea.sql-compact { min-height: 9rem; }
+
+.diff { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .84rem; }
+
+.diff-row {
+    display: flex;
+    gap: .6rem;
+    align-items: baseline;
+    padding: .25rem .5rem;
+    border-bottom: 1px solid #eef1f5;
+}
+
+.diff-row:last-child { border-bottom: none; }
+.diff-mark { width: 1rem; font-weight: 700; text-align: center; }
+.diff-add { background: #f2fbf5; }
+.diff-add .diff-mark { color: var(--ok); }
+.diff-remove { background: #fdf4f3; }
+.diff-remove .diff-mark { color: var(--bad); }
+.diff-alter { background: #fffaf0; }
+.diff-alter .diff-mark { color: var(--warn); }
+
+.btn-xs {
+    padding: .05rem .4rem;
+    font-size: .74rem;
+    line-height: 1.4;
+}
+
+pre.sample-sql {
+    max-height: 60vh;
+    font-size: .82rem;
+    margin: 0;
+}
+
+details summary { cursor: pointer; }

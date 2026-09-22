@@ -1,5 +1,6 @@
 @model SchemaViewModel
 @using Voot.CodeGen.Domain.Schema
+@using Voot.CodeGen.Application.Models
 @{
     var project = Model.Structure.Project;
     var tables = Model.Structure.Tables;
@@ -17,6 +18,13 @@
         </div>
     </div>
     <div class="d-flex gap-2">
+        @if (Model.HasSelection)
+        {
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    data-sample-for="__all__" data-sample-title="Sample inserts for @Model.Structure.Selected.Count table(s)">
+                Sample inserts
+            </button>
+        }
         <a asp-action="Schema" asp-route-id="@project.Id" asp-route-all="true" class="btn btn-outline-secondary btn-sm">
             Show all tables
         </a>
@@ -30,6 +38,190 @@
         No longer in the database:
         <span class="mono">@string.Join(", ", Model.Structure.MissingTables)</span>.
         They may have been dropped or renamed since this link was made.
+    </div>
+}
+
+@{
+    var change = Model.LastChange;
+}
+
+@if (change is not null)
+{
+    if (change.Succeeded)
+    {
+        <div class="card">
+            <h2>SQL applied &mdash; @change.Diff.Summary()</h2>
+            <div class="card-body">
+                <div class="small-muted mb-2">
+                    @change.Execution.BatchesExecuted batch(es), @change.Execution.RowsAffected row(s) affected.
+                    The structure below already reflects it.
+                </div>
+
+                @if (!change.Diff.HasChanges)
+                {
+                    <span class="muted">The script ran but did not alter any table structure.</span>
+                }
+                else
+                {
+                    <div class="diff">
+                        @foreach (var added in change.Diff.AddedTables)
+                        {
+                            <div class="diff-row diff-add">
+                                <span class="diff-mark">+</span>
+                                <span class="mono">table @added.QualifiedName</span>
+                                <span class="small-muted">@added.Columns.Count column(s)</span>
+                            </div>
+                        }
+                        @foreach (var dropped in change.Diff.RemovedTables)
+                        {
+                            <div class="diff-row diff-remove">
+                                <span class="diff-mark">&minus;</span>
+                                <span class="mono">table @dropped.QualifiedName</span>
+                            </div>
+                        }
+                        @foreach (var t in change.Diff.ChangedTables)
+                        {
+                            foreach (var c in t.AddedColumns)
+                            {
+                                <div class="diff-row diff-add">
+                                    <span class="diff-mark">+</span>
+                                    <span class="mono">@t.TableName.@c.Name</span>
+                                    <span class="small-muted mono">@SchemaComparer.Describe(c)</span>
+                                </div>
+                            }
+                            foreach (var c in t.RemovedColumns)
+                            {
+                                <div class="diff-row diff-remove">
+                                    <span class="diff-mark">&minus;</span>
+                                    <span class="mono">@t.TableName.@c.Name</span>
+                                </div>
+                            }
+                            foreach (var c in t.ChangedColumns)
+                            {
+                                <div class="diff-row diff-alter">
+                                    <span class="diff-mark">~</span>
+                                    <span class="mono">@t.TableName.@c.ColumnName</span>
+                                    <span class="small-muted mono">@c.Before &rarr; @c.After</span>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <div class="small-muted mt-2">
+                        The generated code is unchanged until you regenerate.
+                        <form asp-controller="Runs" asp-action="Regenerate" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="projectId" value="@project.Id" />
+                            <button type="submit" class="btn btn-link btn-sm p-0 align-baseline">Regenerate now</button>
+                        </form>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-danger">
+            <strong>The SQL failed.</strong>
+            <div class="mt-1">@change.Change.ErrorMessage</div>
+            <div class="small mt-1">
+                @if (change.Change.ErrorNumber is { } number)
+                {
+                    <span>SQL Server error @number</span>
+                }
+                @if (change.Change.ErrorLineNumber is { } line)
+                {
+                    <span>, line @line</span>
+                }
+                @if (change.Execution.FailedBatchIndex is { } batch)
+                {
+                    <span>, batch @(batch + 1)</span>
+                }
+                &middot; nothing was applied@(project.Settings.UseTransactionForSql ? " (rolled back)" : "").
+            </div>
+        </div>
+    }
+}
+
+<div class="card">
+    <h2>Run SQL against this database</h2>
+    <div class="card-body">
+        <form asp-action="RunSql" asp-route-id="@project.Id" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="all" value="@Model.SelectAll.ToString().ToLowerInvariant()" />
+            @foreach (var name in Model.SelectedNames)
+            {
+                <input type="hidden" name="table" value="@name" />
+            }
+
+            <div class="row g-2 mb-2">
+                <div class="col-md-5">
+                    <input type="text" name="title" class="form-control form-control-sm"
+                           value="@Model.Title" placeholder="Title (optional), e.g. Add IsArchived to Invoice" />
+                </div>
+                <div class="col-md-7 small-muted d-flex align-items-center">
+                    Runs against <span class="mono ms-1">@project.ConnectionStringSummary</span>.
+                    @(project.Settings.UseTransactionForSql
+                        ? "All batches share one transaction."
+                        : "Transactions are off for this project.")
+                </div>
+            </div>
+
+            <textarea name="sqlText" class="form-control sql sql-compact" spellcheck="false"
+                      placeholder="ALTER TABLE dbo.tbl_Invoice ADD IsArchived bit NOT NULL DEFAULT (0);&#10;GO">@Model.SqlText</textarea>
+            <div class="form-text">
+                <code>GO</code> separators are supported. Every script is kept in this project's
+                change history, whether it succeeds or fails.
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm mt-2">Run and show changes</button>
+        </form>
+    </div>
+</div>
+
+@if (Model.RecentChanges.Count > 0)
+{
+    <div class="card">
+        <h2>Change log</h2>
+        <div class="card-body p-0">
+            <table class="data">
+                <thead>
+                    <tr><th>When</th><th>By</th><th>Title</th><th>Result</th><th>Structure</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var entry in Model.RecentChanges)
+                {
+                    <tr>
+                        <td class="small-muted">@entry.SubmittedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                        <td class="small-muted">@entry.SubmittedByUserName</td>
+                        <td>
+                            @(string.IsNullOrWhiteSpace(entry.Title) ? "—" : entry.Title)
+                            <details class="mt-1">
+                                <summary class="small-muted">SQL</summary>
+                                <pre class="detail">@entry.SqlText</pre>
+                            </details>
+                        </td>
+                        <td>
+                            @if (entry.Status == ChangeRequestStatus.Applied)
+                            {
+                                <span class="pill pill-succeeded">applied</span>
+                            }
+                            else if (entry.Status == ChangeRequestStatus.Failed)
+                            {
+                                <span class="pill pill-failed">failed</span>
+                                <div class="small-muted">@entry.ErrorMessage</div>
+                            }
+                            else
+                            {
+                                <span class="pill pill-queued">pending</span>
+                            }
+                        </td>
+                        <td class="small-muted">@(entry.StructureSummary ?? "—")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
     </div>
 }
 
@@ -104,6 +296,10 @@
                 <h2 class="d-flex justify-content-between align-items-center">
                     <span class="mono">@table.QualifiedName</span>
                     <span class="table-tags">
+                        <button type="button" class="btn btn-outline-secondary btn-xs"
+                                data-sample-for="@table.Name" data-sample-title="Sample INSERT for @table.QualifiedName">
+                            Sample insert
+                        </button>
                         <span class="pill pill-queued" title="Class name the generator derives">@className</span>
                         @if (isMapping)
                         {
@@ -128,12 +324,16 @@
                             </tr>
                         </thead>
                         <tbody>
+                        @{ var position = 0; }
                         @foreach (var column in table.Columns)
                         {
                             var fk = SchemaDisplay.ForeignKeyFor(table, column);
                             var def = SchemaDisplay.Default(column);
+                            position++;
+                            @* The position in the table, not sys.columns.column_id, which keeps
+                               gaps after a DROP COLUMN and would read as a missing column. *@
                             <tr>
-                                <td class="small-muted">@(column.Ordinal + 1)</td>
+                                <td class="small-muted">@position</td>
                                 <td class="mono">@column.Name</td>
                                 <td class="mono small-muted">@SchemaDisplay.SqlType(column)</td>
                                 <td class="small-muted">@(column.AllowDbNull ? "yes" : "no")</td>
@@ -217,6 +417,40 @@
     </div>
 </div>
 
+@if (Model.HasSelection)
+{
+    @* Payloads for the modal. Rendered as escaped text and read back with textContent, so a
+       table or column name cannot break out of the markup. *@
+    <div class="d-none" id="sample-store">
+        @foreach (var table in Model.Structure.Selected)
+        {
+            <pre data-sample="@table.Name">@SampleInsertBuilder.Build(table)</pre>
+        }
+        <pre data-sample="__all__">@SampleInsertBuilder.Build(Model.Structure.Selected)</pre>
+    </div>
+
+    <div class="modal fade" id="sample-modal" tabindex="-1" aria-labelledby="sample-modal-title" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="sample-modal-title">Sample insert</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <pre class="detail sample-sql" id="sample-sql"></pre>
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <span class="small-muted" id="sample-copy-status" role="status" aria-live="polite"></span>
+                    <span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="sample-copy">Copy</button>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @section Scripts {
     <script>
         // Select all / clear act on the rows the filter currently shows, so filtering then
@@ -240,6 +474,48 @@
             filter.addEventListener('input', function () {
                 const term = filter.value.trim().toLowerCase();
                 rows.forEach(r => { r.hidden = term.length > 0 && !r.dataset.name.includes(term); });
+            });
+        })();
+
+        // Sample INSERT modal, with copy-to-clipboard.
+        (function () {
+            const store = document.getElementById('sample-store');
+            const modalEl = document.getElementById('sample-modal');
+            if (!store || !modalEl) { return; }
+
+            const modal = new bootstrap.Modal(modalEl);
+            const sqlEl = document.getElementById('sample-sql');
+            const titleEl = document.getElementById('sample-modal-title');
+            const statusEl = document.getElementById('sample-copy-status');
+
+            document.querySelectorAll('[data-sample-for]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const source = store.querySelector('[data-sample="' + button.dataset.sampleFor + '"]');
+                    if (!source) { return; }
+
+                    sqlEl.textContent = source.textContent;
+                    titleEl.textContent = button.dataset.sampleTitle || 'Sample insert';
+                    statusEl.textContent = '';
+                    modal.show();
+                });
+            });
+
+            document.getElementById('sample-copy').addEventListener('click', async function () {
+                const text = sqlEl.textContent;
+
+                try {
+                    await navigator.clipboard.writeText(text);
+                    statusEl.textContent = 'Copied to the clipboard.';
+                } catch {
+                    // The Clipboard API needs a secure context; fall back to selecting the text
+                    // so the statement can still be copied by hand.
+                    const range = document.createRange();
+                    range.selectNodeContents(sqlEl);
+                    const selection = window.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    statusEl.textContent = 'Selected — press Ctrl/Cmd+C to copy.';
+                }
             });
         })();
     </script>

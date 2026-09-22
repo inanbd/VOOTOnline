@@ -43,6 +43,22 @@ public sealed class SchemaBrowsingService(
         // four regardless of how many tables were picked.
         var database = await schemaReader.ReadAsync(connectionString, cancellationToken);
 
+        return BuildStructure(project, database, selectedTables, selectAll);
+    }
+
+    /// <summary>
+    /// Shapes a snapshot into the browser's view model. Separate from the read so a caller that
+    /// already has a snapshot — the SQL runner, which re-reads to diff — does not read again.
+    /// </summary>
+    public static SchemaStructure BuildStructure(
+        Project project,
+        DatabaseModel database,
+        IReadOnlyCollection<string> selectedTables,
+        bool selectAll)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+        ArgumentNullException.ThrowIfNull(selectedTables);
+
         var summaries = database.Tables
             .Select(t => new TableSummary(t.Owner, t.Name, t.Columns.Count, t.HasPrimaryKey))
             .ToList();

@@ -18,6 +18,14 @@ over SQL Server's catalog views. There is no CodeSmith dependency and no Entity 
 - **Structure.** Anyone on a project can browse its database's current table structures —
   columns, types, defaults, keys, foreign keys and indexes — picking tables individually or
   all at once. The view is read live, so it always reflects the database as it is now.
+- **Ad-hoc SQL.** The same page runs SQL against the project's database and shows the
+  structural diff it produced: tables added or dropped, columns added, dropped or altered.
+  Every script is recorded in the project's change log with its outcome and a summary of what
+  it changed. Running SQL here does not regenerate the code; that stays an explicit step, and
+  the page links to it.
+- **Sample inserts.** Each table offers a ready-to-run `INSERT` with placeholder data, for one
+  table or the whole selection, in a dialog with a copy button. Identity, computed and
+  rowversion columns are left out because the server assigns them.
 - **Changes.** An assigned user submits SQL. It runs against that project's database, in one
   transaction by default, and the script is kept permanently as the audit record.
 - **Generation.** On success the schema is re-read and every table is regenerated. A table that

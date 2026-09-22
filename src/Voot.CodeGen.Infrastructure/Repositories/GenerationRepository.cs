@@ -19,11 +19,11 @@ public sealed class GenerationRepository(ISqlConnectionFactory connectionFactory
             INSERT INTO [dbo].[ChangeRequests]
                 ([Id], [ProjectId], [SubmittedByUserId], [SubmittedByUserName], [Title], [SqlText],
                  [Status], [SubmittedUtc], [AppliedUtc], [BatchesExecuted], [RowsAffected],
-                 [ErrorMessage], [ErrorNumber], [ErrorLineNumber])
+                 [ErrorMessage], [ErrorNumber], [ErrorLineNumber], [StructureSummary])
             VALUES
                 (@Id, @ProjectId, @SubmittedByUserId, @SubmittedByUserName, @Title, @SqlText,
                  @Status, @SubmittedUtc, @AppliedUtc, @BatchesExecuted, @RowsAffected,
-                 @ErrorMessage, @ErrorNumber, @ErrorLineNumber);
+                 @ErrorMessage, @ErrorNumber, @ErrorLineNumber, @StructureSummary);
             """,
             request,
             cancellationToken: cancellationToken));
@@ -42,7 +42,8 @@ public sealed class GenerationRepository(ISqlConnectionFactory connectionFactory
                 [RowsAffected] = @RowsAffected,
                 [ErrorMessage] = @ErrorMessage,
                 [ErrorNumber] = @ErrorNumber,
-                [ErrorLineNumber] = @ErrorLineNumber
+                [ErrorLineNumber] = @ErrorLineNumber,
+                [StructureSummary] = @StructureSummary
             WHERE [Id] = @Id;
             """,
             request,

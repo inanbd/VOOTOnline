@@ -14,6 +14,7 @@ public sealed class ProjectsController(
     ProjectAccessService access,
     RunHistoryService history,
     SchemaBrowsingService schema,
+    SchemaChangeService schemaChanges,
     IUserDirectory users) : Controller
 {
     /// <summary>Project overview with its change and run history.</summary>
@@ -45,15 +46,64 @@ public sealed class ProjectsController(
         var selected = tables ?? [];
         var structure = await schema.GetStructureAsync(id, selected, all, cancellationToken);
 
-        return View(new SchemaViewModel
+        return View(await BuildSchemaViewAsync(id, structure, selected, all, cancellationToken));
+    }
+
+    /// <summary>
+    /// Runs SQL against the project's database from the schema page and shows what it changed.
+    /// The script is recorded in the project's change history either way; generating the code
+    /// afterwards stays a separate, explicit step.
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RunSql(
+        Guid id,
+        string sqlText,
+        string? title,
+        [FromForm(Name = "table")] string[]? tables,
+        bool all = false,
+        CancellationToken cancellationToken = default)
+    {
+        var selected = tables ?? [];
+        var result = await schemaChanges.ExecuteAsync(id, sqlText, title, cancellationToken);
+
+        // A domain rule may have rejected the request before anything ran.
+        if (!ModelState.IsValid)
+        {
+            var current = await schema.GetStructureAsync(id, selected, all, cancellationToken);
+            var rejected = await BuildSchemaViewAsync(id, current, selected, all, cancellationToken);
+
+            return View("Schema", rejected with { SqlText = sqlText, Title = title });
+        }
+
+        // Reuse the snapshot the service already read rather than querying the catalog again.
+        var project = await access.RequireAccessAsync(id, cancellationToken);
+        var structure = SchemaBrowsingService.BuildStructure(project, result.Schema, selected, all);
+        var model = await BuildSchemaViewAsync(id, structure, selected, all, cancellationToken);
+
+        return View("Schema", model with
+        {
+            LastChange = result,
+            SqlText = result.Succeeded ? null : sqlText,
+            Title = result.Succeeded ? null : title
+        });
+    }
+
+    private async Task<SchemaViewModel> BuildSchemaViewAsync(
+        Guid id,
+        Application.Services.SchemaStructure structure,
+        string[] selected,
+        bool all,
+        CancellationToken cancellationToken) =>
+        new()
         {
             Structure = structure,
             Names = new NameResolver(structure.Project.Settings),
             SelectedNames = all
                 ? [.. structure.Tables.Select(t => t.Name)]
-                : new HashSet<string>(selected, StringComparer.OrdinalIgnoreCase)
-        });
-    }
+                : new HashSet<string>(selected, StringComparer.OrdinalIgnoreCase),
+            RecentChanges = await history.GetChangesAsync(id, 10, cancellationToken)
+        };
 
     [Authorize(Policy = AuthorizationPolicies.Administrator)]
     [HttpGet]

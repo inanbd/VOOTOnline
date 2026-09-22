@@ -37,4 +37,11 @@ public sealed class ChangeRequest
     public int? ErrorNumber { get; set; }
 
     public int? ErrorLineNumber { get; set; }
+
+    /// <summary>
+    /// What the change did to the schema, e.g. <c>+1 table, +2 columns</c>. Recorded when the
+    /// change is applied so the history says what happened without keeping a second snapshot.
+    /// Null for changes applied before this was captured.
+    /// </summary>
+    public string? StructureSummary { get; set; }
 }
