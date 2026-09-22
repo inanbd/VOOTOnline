@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Voot.CodeGen.Application.Abstractions;
 using Voot.CodeGen.Application.Services;
 using Voot.CodeGen.Domain.Projects;
+using Voot.CodeGen.Generation.Naming;
 using Voot.CodeGen.Web.Security;
 using Voot.CodeGen.Web.ViewModels;
 
@@ -12,6 +13,7 @@ public sealed class ProjectsController(
     ProjectService projects,
     ProjectAccessService access,
     RunHistoryService history,
+    SchemaBrowsingService schema,
     IUserDirectory users) : Controller
 {
     /// <summary>Project overview with its change and run history.</summary>
@@ -25,6 +27,31 @@ public sealed class ProjectsController(
             Runs = await history.GetRunsAsync(id, 25, cancellationToken),
             Changes = await history.GetChangesAsync(id, 25, cancellationToken),
             IsAdministrator = User.IsInRole(Domain.Identity.RoleNames.Administrator)
+        });
+    }
+
+    /// <summary>
+    /// Browses the current structure of the project's database. Tables are chosen with
+    /// <paramref name="tables"/>, or all of them with <paramref name="all"/>. Both live in the
+    /// query string so a particular view is linkable.
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> Schema(
+        Guid id,
+        [FromQuery(Name = "table")] string[]? tables,
+        bool all = false,
+        CancellationToken cancellationToken = default)
+    {
+        var selected = tables ?? [];
+        var structure = await schema.GetStructureAsync(id, selected, all, cancellationToken);
+
+        return View(new SchemaViewModel
+        {
+            Structure = structure,
+            Names = new NameResolver(structure.Project.Settings),
+            SelectedNames = all
+                ? [.. structure.Tables.Select(t => t.Name)]
+                : new HashSet<string>(selected, StringComparer.OrdinalIgnoreCase)
         });
     }
 

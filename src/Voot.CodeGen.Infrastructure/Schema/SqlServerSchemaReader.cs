@@ -1,6 +1,7 @@
 using Dapper;
 using Microsoft.Data.SqlClient;
 using Voot.CodeGen.Application.Abstractions;
+using Voot.CodeGen.Application.Models;
 using Voot.CodeGen.Domain.Schema;
 
 namespace Voot.CodeGen.Infrastructure.Schema;
@@ -25,6 +26,38 @@ public sealed class SqlServerSchemaReader : ISchemaReader
             return ex.Message;
         }
     }
+
+    public async Task<IReadOnlyList<TableSummary>> ListTablesAsync(
+        string connectionString, CancellationToken cancellationToken = default)
+    {
+        // One pass over the catalog: enough for the picker, without the column, key and index
+        // reads that a full ReadAsync does.
+        const string sql = """
+            SELECT
+                s.name AS Owner,
+                t.name AS Name,
+                (SELECT COUNT(*) FROM sys.columns c WHERE c.object_id = t.object_id) AS ColumnCount,
+                CAST(CASE WHEN EXISTS (
+                    SELECT 1 FROM sys.key_constraints kc
+                    WHERE kc.parent_object_id = t.object_id AND kc.type = 'PK'
+                ) THEN 1 ELSE 0 END AS bit) AS HasPrimaryKey
+            FROM sys.tables t
+            INNER JOIN sys.schemas s ON s.schema_id = t.schema_id
+            WHERE t.is_ms_shipped = 0
+            ORDER BY s.name, t.name;
+            """;
+
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        var rows = await connection.QueryAsync<TableSummaryRow>(
+            new CommandDefinition(sql, cancellationToken: cancellationToken));
+
+        return [.. rows.Select(r => new TableSummary(r.Owner, r.Name, r.ColumnCount, r.HasPrimaryKey))];
+    }
+
+    /// <summary>Dapper maps by column name, which rules out projecting straight into the record struct.</summary>
+    private sealed record TableSummaryRow(string Owner, string Name, int ColumnCount, bool HasPrimaryKey);
 
     public async Task<DatabaseModel> ReadAsync(string connectionString, CancellationToken cancellationToken = default)
     {

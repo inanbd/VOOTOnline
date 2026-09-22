@@ -83,6 +83,8 @@ else
                             }
                         </td>
                         <td class="text-end">
+                            <a asp-controller="Projects" asp-action="Schema" asp-route-id="@item.Project.Id"
+                               class="btn btn-sm btn-outline-secondary">Structure</a>
                             <a asp-controller="Runs" asp-action="Submit" asp-route-projectId="@item.Project.Id"
                                class="btn btn-sm btn-outline-primary">Apply SQL</a>
                         </td>

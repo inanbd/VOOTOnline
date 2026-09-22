@@ -15,6 +15,9 @@ over SQL Server's catalog views. There is no CodeSmith dependency and no Entity 
   (encrypted at rest) plus the generator settings the original `.csp` property set carried.
 - **Access.** Administrators reach every project. Everyone else reaches only the projects they
   are assigned to.
+- **Structure.** Anyone on a project can browse its database's current table structures —
+  columns, types, defaults, keys, foreign keys and indexes — picking tables individually or
+  all at once. The view is read live, so it always reflects the database as it is now.
 - **Changes.** An assigned user submits SQL. It runs against that project's database, in one
   transaction by default, and the script is kept permanently as the audit record.
 - **Generation.** On success the schema is re-read and every table is regenerated. A table that

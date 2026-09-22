@@ -1,0 +1,246 @@
+@model SchemaViewModel
+@using Voot.CodeGen.Domain.Schema
+@{
+    var project = Model.Structure.Project;
+    var tables = Model.Structure.Tables;
+    ViewData["Title"] = $"Schema · {project.Name}";
+}
+
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h1 class="h4 mb-1">Database structure</h1>
+        <div class="small-muted">
+            <a asp-action="Details" asp-route-id="@project.Id">@project.Name</a>
+            &middot; <span class="mono">@project.ConnectionStringSummary</span>
+            &middot; @tables.Count table@(tables.Count == 1 ? "" : "s")
+            &middot; read just now
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <a asp-action="Schema" asp-route-id="@project.Id" asp-route-all="true" class="btn btn-outline-secondary btn-sm">
+            Show all tables
+        </a>
+        <a asp-action="Details" asp-route-id="@project.Id" class="btn btn-outline-secondary btn-sm">Back to project</a>
+    </div>
+</div>
+
+@if (Model.Structure.MissingTables.Count > 0)
+{
+    <div class="alert alert-warning">
+        No longer in the database:
+        <span class="mono">@string.Join(", ", Model.Structure.MissingTables)</span>.
+        They may have been dropped or renamed since this link was made.
+    </div>
+}
+
+<div class="row">
+    <div class="col-lg-3">
+        <div class="card table-picker">
+            <h2>Tables</h2>
+            <div class="card-body">
+                @if (tables.Count == 0)
+                {
+                    <span class="muted">This database has no tables.</span>
+                }
+                else
+                {
+                    <form asp-action="Schema" method="get" id="picker">
+                        <input type="hidden" name="id" value="@project.Id" />
+
+                        <div class="d-flex gap-2 mb-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" data-pick="all">Select all</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" data-pick="none">Clear</button>
+                        </div>
+
+                        <input type="search" class="form-control form-control-sm mb-2" id="filter"
+                               placeholder="Filter tables" autocomplete="off" aria-label="Filter tables" />
+
+                        <div class="picker-list">
+                            @foreach (var table in tables)
+                            {
+                                <label class="picker-row" data-name="@table.Name.ToLowerInvariant()">
+                                    <input type="checkbox" name="table" value="@table.Name"
+                                           checked="@(Model.SelectedNames.Contains(table.Name))" />
+                                    <span class="picker-name mono">@table.Name</span>
+                                    <span class="picker-meta">
+                                        @table.ColumnCount
+                                        @if (!table.HasPrimaryKey)
+                                        {
+                                            <span class="no-pk" title="No primary key: the generator skips this table">!</span>
+                                        }
+                                    </span>
+                                </label>
+                            }
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-sm w-100 mt-2">Show structure</button>
+                    </form>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-9">
+        @if (!Model.HasSelection)
+        {
+            <div class="card">
+                <div class="card-body">
+                    <p class="mb-1">Pick one or more tables to see their structure.</p>
+                    <p class="small-muted mb-0">
+                        Tick them individually, or use <strong>Select all</strong>. A
+                        <span class="no-pk">!</span> marks a table with no primary key, which the
+                        generator skips.
+                    </p>
+                </div>
+            </div>
+        }
+
+        @foreach (var table in Model.Structure.Selected)
+        {
+            var className = Model.Names.ClassName(table);
+            var isMapping = Model.Names.IsMappingTable(table);
+
+            <div class="card">
+                <h2 class="d-flex justify-content-between align-items-center">
+                    <span class="mono">@table.QualifiedName</span>
+                    <span class="table-tags">
+                        <span class="pill pill-queued" title="Class name the generator derives">@className</span>
+                        @if (isMapping)
+                        {
+                            <span class="pill pill-running" title="Generated against BaseRelationData, with no manager">junction</span>
+                        }
+                        @if (!table.HasPrimaryKey)
+                        {
+                            <span class="pill pill-failed" title="The generator skips tables without a primary key">no primary key</span>
+                        }
+                    </span>
+                </h2>
+                <div class="card-body p-0">
+                    <table class="data schema-columns">
+                        <thead>
+                            <tr>
+                                <th style="width:2.5rem">#</th>
+                                <th>Column</th>
+                                <th>Type</th>
+                                <th style="width:5rem">Null</th>
+                                <th>Default</th>
+                                <th>Keys</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var column in table.Columns)
+                        {
+                            var fk = SchemaDisplay.ForeignKeyFor(table, column);
+                            var def = SchemaDisplay.Default(column);
+                            <tr>
+                                <td class="small-muted">@(column.Ordinal + 1)</td>
+                                <td class="mono">@column.Name</td>
+                                <td class="mono small-muted">@SchemaDisplay.SqlType(column)</td>
+                                <td class="small-muted">@(column.AllowDbNull ? "yes" : "no")</td>
+                                <td class="mono small-muted">@(def ?? "—")</td>
+                                <td>
+                                    @foreach (var trait in SchemaDisplay.Traits(column))
+                                    {
+                                        <span class="trait trait-@trait.ToLowerInvariant()">@trait</span>
+                                    }
+                                    @if (fk is not null)
+                                    {
+                                        <a class="fk-target mono"
+                                           asp-action="Schema" asp-route-id="@project.Id"
+                                           asp-route-table="@fk.PrimaryKeyTableName"
+                                           title="Show @fk.PrimaryKeyTableName">
+                                            → @fk.PrimaryKeyTableName
+                                        </a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+
+                    <div class="schema-extras">
+                        <div>
+                            <div class="extras-label">Primary key</div>
+                            @if (table.PrimaryKey is { } pk)
+                            {
+                                <div class="mono">@SchemaDisplay.ColumnList(pk.MemberColumns)</div>
+                                <div class="small-muted">@pk.Name@(pk.IsComposite ? " (composite)" : "")</div>
+                            }
+                            else
+                            {
+                                <span class="muted">none</span>
+                            }
+                        </div>
+
+                        <div>
+                            <div class="extras-label">Foreign keys</div>
+                            @if (table.ForeignKeys.Count == 0)
+                            {
+                                <span class="muted">none</span>
+                            }
+                            else
+                            {
+                                @foreach (var fk in table.ForeignKeys)
+                                {
+                                    <div class="mono">
+                                        @SchemaDisplay.ColumnList(fk.ForeignKeyMemberColumns)
+                                        →
+                                        <a asp-action="Schema" asp-route-id="@project.Id" asp-route-table="@fk.PrimaryKeyTableName">@fk.PrimaryKeyTableName</a>(@SchemaDisplay.ColumnList(fk.PrimaryKeyMemberColumns))
+                                    </div>
+                                    <div class="small-muted mb-1">@fk.Name</div>
+                                }
+                            }
+                        </div>
+
+                        <div>
+                            <div class="extras-label">Indexes</div>
+                            @if (table.Indexes.Count == 0)
+                            {
+                                <span class="muted">none</span>
+                            }
+                            else
+                            {
+                                @foreach (var index in table.Indexes)
+                                {
+                                    <div class="mono">@index.Name</div>
+                                    <div class="small-muted mb-1">
+                                        @SchemaDisplay.ColumnList(index.MemberColumns)
+                                        @(index.IsUnique ? " · unique" : "")@(index.IsClustered ? " · clustered" : "")@(index.IsPrimaryKey ? " · primary key" : "")
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Select all / clear act on the rows the filter currently shows, so filtering then
+        // selecting all picks what you can see rather than the whole database.
+        (function () {
+            const form = document.getElementById('picker');
+            if (!form) { return; }
+
+            const rows = Array.from(form.querySelectorAll('.picker-row'));
+            const filter = document.getElementById('filter');
+
+            const visible = () => rows.filter(r => !r.hidden);
+
+            form.querySelectorAll('[data-pick]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const checked = button.dataset.pick === 'all';
+                    visible().forEach(r => { r.querySelector('input').checked = checked; });
+                });
+            });
+
+            filter.addEventListener('input', function () {
+                const term = filter.value.trim().toLowerCase();
+                rows.forEach(r => { r.hidden = term.length > 0 && !r.dataset.name.includes(term); });
+            });
+        })();
+    </script>
+}

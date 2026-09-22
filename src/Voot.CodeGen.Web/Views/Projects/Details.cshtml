@@ -22,6 +22,10 @@
         <a asp-controller="Runs" asp-action="Submit" asp-route-projectId="@Model.Project.Id"
            class="btn btn-primary btn-sm">Apply SQL</a>
 
+        <a asp-action="Schema" asp-route-id="@Model.Project.Id" class="btn btn-outline-secondary btn-sm">
+            View structure
+        </a>
+
         <form asp-controller="Runs" asp-action="Regenerate" method="post" class="d-inline">
             @Html.AntiForgeryToken()
             <input type="hidden" name="projectId" value="@Model.Project.Id" />
