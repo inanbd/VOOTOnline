@@ -71,6 +71,26 @@ switches and emitted `__UNKNOWN__date` and similar into the source. These types 
 mapped. Anything still unrecognised skips the table and raises a visible error diagnostic
 instead of emitting text that cannot compile.
 
+`date` in particular is now carried end to end: `DateTime` in the entity, `pDateTime` for the
+parameter, `reader.GetDateTime` for the read, and `date` — not a widened `datetime` — in the
+procedure's parameter list.
+
+### 6a. Nullable `uniqueidentifier`
+
+A nullable `uniqueidentifier` maps to `Nullable<Guid>` (Legacy) or `Guid?` (Modern), is read
+behind an `IsDBNull` guard, and is passed with `pGuid`. The cases that broke in the originals
+were the ones around it rather than the mapping itself:
+
+- as a **nullable foreign key**, the generated manager handed `Nullable<Guid>` straight to a
+  `Get(Guid, bool)` overload, which does not compile — see defect 12;
+- as a **primary key**, the maximum-key procedure emitted `ISNULL(MAX(key), 0)` against a
+  `uniqueidentifier`, an operand type clash, and `GetRowCount` returned the key's type — see
+  defect 11;
+- the out-parameter helper for a GUID key was emitted with a value argument that the integer
+  case did not take.
+
+All three are fixed, and both types are covered by tests and verified against SQL Server.
+
 ### 7. SELECT order was not guaranteed to match the reader offsets
 
 Generated `FillObject` walks columns in table order and then calls
@@ -145,6 +165,20 @@ compiling the generated output against the framework contract.
   generated code expects, since the archive ships generated files only.
 - **Diagnostics.** A table that fails generation is reported and skipped instead of aborting
   the run, so one bad table cannot cost the whole archive.
+
+### Extra data access constructors
+
+The hand-editable half of each data access class (`{Root}/{DataAccess}/{Entity}DataAccess.cs`,
+not the regenerated file under `Bases`) now also carries:
+
+```csharp
+public {Entity}DataAccess() { }
+public {Entity}DataAccess(string ConnectionStr) : base(ConnectionStr) { }
+```
+
+They live in the editable half so the constructor set stays yours to change. Both require the
+framework's `BaseDataAccess` and `BaseRelationData` to provide a parameterless constructor and
+one taking a connection string; each archive's README lists that requirement.
 
 ## Known limitations carried over from the originals
 

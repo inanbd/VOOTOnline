@@ -79,17 +79,33 @@ public static class TestSchema
             ]
         };
 
-        // ---- tbl_Role: non-identity key, to exercise the non-identity insert path ----
+        // ---- tbl_Role: non-identity GUID key, plus the types the original templates could
+        // not emit: a nullable uniqueidentifier, a nullable GUID foreign key, and date ----
         var roleId = Column("tbl_Role", "RoleId", 0, "uniqueidentifier", SqlDataType.UniqueIdentifier, primaryKey: true);
         var roleName = Column("tbl_Role", "RoleName", 1, "varchar", SqlDataType.VarChar, size: 40);
+        var roleOwnerId = Column("tbl_Role", "OwnerId", 2, "uniqueidentifier", SqlDataType.UniqueIdentifier, nullable: true);
+        var roleParentId = Column("tbl_Role", "ParentRoleId", 3, "uniqueidentifier", SqlDataType.UniqueIdentifier,
+            nullable: true, foreignKey: true);
+        var roleEffective = Column("tbl_Role", "EffectiveFrom", 4, "date", SqlDataType.Date);
+        var roleExpires = Column("tbl_Role", "ExpiresOn", 5, "date", SqlDataType.Date, nullable: true);
 
         var role = new TableModel
         {
             Name = "tbl_Role",
             Owner = "dbo",
-            Columns = [roleId, roleName],
+            Columns = [roleId, roleName, roleOwnerId, roleParentId, roleEffective, roleExpires],
             PrimaryKey = new PrimaryKeyModel { Name = "PK_Role", MemberColumns = [roleId] },
-            ForeignKeys = []
+            ForeignKeys =
+            [
+                new ForeignKeyModel
+                {
+                    Name = "FK_Role_Parent",
+                    ForeignKeyTableName = "tbl_Role",
+                    ForeignKeyMemberColumns = [roleParentId],
+                    PrimaryKeyTableName = "tbl_Role",
+                    PrimaryKeyMemberColumns = [roleId]
+                }
+            ]
         };
 
         // ---- tbl_User_Role: junction table (underscore survives prefix stripping) ----

@@ -30,6 +30,16 @@ public sealed class PartialDataAccessEmitter : EmitterBase
         {
             using (writer.Block($"public partial class {accessName}"))
             {
+                // These live here rather than in the regenerated half so the constructor set
+                // stays editable. The base class must provide a parameterless constructor and
+                // one taking a connection string; the archive README lists both.
+                using (writer.Region("Constructors"))
+                {
+                    writer.Line($"public {accessName}() {{ }}");
+                    writer.Line($"public {accessName}(string ConnectionStr) : base(ConnectionStr) {{ }}");
+                }
+
+                writer.Blank();
                 writer.Line("// Hand-written queries for this table go here.");
             }
         }

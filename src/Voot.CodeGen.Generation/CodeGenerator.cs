@@ -151,7 +151,9 @@ public sealed class CodeGenerator : ICodeGenerator
         writer.Line("  BaseBusinessEntity      base entity with RowState, PropertyChanging/Changed,");
         writer.Line("                          CloneBase, CustomPropertyMatch and GetObjectData");
         writer.Line("  BaseCollection<T>       base typed collection");
-        writer.Line("  BaseDataAccess          GetSPCommand, AddParameter, GetOutParameter,");
+        writer.Line("  BaseDataAccess          a parameterless constructor, one taking a connection");
+        writer.Line("                          string, and one taking the context; plus");
+        writer.Line("                          GetSPCommand, AddParameter, GetOutParameter,");
         writer.Line("                          InsertRecord, UpdateRecord, DeleteRecord,");
         writer.Line("                          SelectRecords, FillBaseObject, ALL_AVAILABLE_RECORDS");
         writer.Line("                          and the p* parameter helpers (pInt32, pNVarChar, ...)");
