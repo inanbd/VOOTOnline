@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Voot.CodeGen.Application.Services;
+using Voot.CodeGen.Domain.Generation;
 using Voot.CodeGen.Domain.Projects;
 
 namespace Voot.CodeGen.Web.ViewModels;
@@ -22,6 +23,9 @@ public sealed class SubmitChangeViewModel
     public string? ConnectionStringSummary { get; set; }
 
     public bool UsesTransaction { get; set; } = true;
+
+    /// <summary>Which tables to generate once the SQL succeeds; pre-set from the project default.</summary>
+    public GenerationScope Scope { get; set; }
 }
 
 public sealed class RunDetailViewModel

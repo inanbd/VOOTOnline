@@ -1,3 +1,4 @@
+using Voot.CodeGen.Application.Models;
 using Voot.CodeGen.Domain.Generation;
 
 namespace Voot.CodeGen.Application.Abstractions;
@@ -58,6 +59,18 @@ public interface IGenerationRepository
     /// rather than leaving a spinner that never resolves.
     /// </summary>
     Task<IReadOnlyList<GenerationRun>> GetUnfinishedRunsAsync(CancellationToken cancellationToken = default);
+
+    // ---- schema snapshots ----
+
+    /// <summary>
+    /// Saves the schema a successful run generated from, replacing the project's older snapshots.
+    /// </summary>
+    Task SaveSnapshotAsync(
+        Guid runId, Guid projectId, SchemaSnapshot snapshot, CancellationToken cancellationToken = default);
+
+    /// <summary>The snapshot of the project's latest successful run, or null if there is none.</summary>
+    Task<SchemaSnapshot?> GetLatestSnapshotAsync(
+        Guid projectId, Guid excludingRunId, CancellationToken cancellationToken = default);
 
     // ---- logs ----
 

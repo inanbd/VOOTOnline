@@ -18,6 +18,12 @@ public sealed class GenerationResult
     /// <summary>Tables skipped because they had no primary key.</summary>
     public int SkippedTableCount { get; init; }
 
+    /// <summary>True when only some tables were generated.</summary>
+    public bool IsPartial { get; init; }
+
+    /// <summary>Qualified names of the tables that produced files.</summary>
+    public IReadOnlyList<string> GeneratedTables { get; init; } = [];
+
     public int WarningCount => Diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning);
 
     public int ErrorCount => Diagnostics.Count(d => d.Severity == DiagnosticSeverity.Error);

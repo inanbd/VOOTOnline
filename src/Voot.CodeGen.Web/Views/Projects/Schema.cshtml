@@ -112,7 +112,12 @@
                         <form asp-controller="Runs" asp-action="Regenerate" method="post" class="d-inline">
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="projectId" value="@project.Id" />
-                            <button type="submit" class="btn btn-link btn-sm p-0 align-baseline">Regenerate now</button>
+                            Regenerate
+                            <button type="submit" name="scope" value="@GenerationScope.ChangedTables"
+                                    class="btn btn-link btn-sm p-0 align-baseline">changed tables</button>
+                            or
+                            <button type="submit" name="scope" value="@GenerationScope.AllTables"
+                                    class="btn btn-link btn-sm p-0 align-baseline">all tables</button>.
                         </form>
                     </div>
                 }

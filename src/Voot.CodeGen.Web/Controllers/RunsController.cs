@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Voot.CodeGen.Application.Services;
+using Voot.CodeGen.Domain.Generation;
 using Voot.CodeGen.Web.ViewModels;
 
 namespace Voot.CodeGen.Web.Controllers;
@@ -21,7 +22,8 @@ public sealed class RunsController(
             ProjectId = project.Id,
             ProjectName = project.Name,
             ConnectionStringSummary = project.ConnectionStringSummary,
-            UsesTransaction = project.Settings.UseTransactionForSql
+            UsesTransaction = project.Settings.UseTransactionForSql,
+            Scope = project.Settings.DefaultGenerationScope
         });
     }
 
@@ -34,7 +36,8 @@ public sealed class RunsController(
             return await RedisplaySubmitAsync(model, cancellationToken);
         }
 
-        var runId = await submissions.SubmitAsync(model.ProjectId, model.SqlText, model.Title, cancellationToken);
+        var runId = await submissions.SubmitAsync(
+            model.ProjectId, model.SqlText, model.Title, model.Scope, cancellationToken);
 
         if (!ModelState.IsValid)
         {
@@ -44,12 +47,16 @@ public sealed class RunsController(
         return RedirectToAction(nameof(Details), new { id = runId });
     }
 
-    /// <summary>Regenerates from the current schema without applying any SQL.</summary>
+    /// <summary>
+    /// Regenerates from the current schema without applying any SQL. With no scope posted,
+    /// the project's default applies.
+    /// </summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Regenerate(Guid projectId, CancellationToken cancellationToken)
+    public async Task<IActionResult> Regenerate(
+        Guid projectId, GenerationScope? scope, CancellationToken cancellationToken)
     {
-        var runId = await submissions.RegenerateAsync(projectId, cancellationToken);
+        var runId = await submissions.RegenerateAsync(projectId, scope, cancellationToken);
 
         return RedirectToAction(nameof(Details), new { id = runId });
     }

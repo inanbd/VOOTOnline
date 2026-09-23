@@ -18,11 +18,13 @@ public sealed class ChangeSubmissionService(
     /// <summary>
     /// Records a SQL change and queues a run for it.
     /// </summary>
+    /// <param name="scope">Which tables to generate; null uses the project's default.</param>
     /// <returns>The id of the queued run, for the status page to poll.</returns>
     public async Task<Guid> SubmitAsync(
         Guid projectId,
         string sqlText,
         string? title,
+        GenerationScope? scope = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(sqlText))
@@ -49,19 +51,24 @@ public sealed class ChangeSubmissionService(
 
         await repository.AddChangeRequestAsync(change, cancellationToken);
 
-        return await QueueRunAsync(project.Id, change.Id, project.Settings.OutputStyle, cancellationToken);
+        return await QueueRunAsync(project.Id, change.Id, project.Settings.OutputStyle,
+            scope ?? project.Settings.DefaultGenerationScope, cancellationToken);
     }
 
     /// <summary>Queues a run that regenerates from the current schema without applying any SQL.</summary>
-    public async Task<Guid> RegenerateAsync(Guid projectId, CancellationToken cancellationToken = default)
+    /// <param name="scope">Which tables to generate; null uses the project's default.</param>
+    public async Task<Guid> RegenerateAsync(
+        Guid projectId, GenerationScope? scope = null, CancellationToken cancellationToken = default)
     {
         var project = await access.RequireAccessAsync(projectId, cancellationToken);
 
-        return await QueueRunAsync(project.Id, null, project.Settings.OutputStyle, cancellationToken);
+        return await QueueRunAsync(project.Id, null, project.Settings.OutputStyle,
+            scope ?? project.Settings.DefaultGenerationScope, cancellationToken);
     }
 
     private async Task<Guid> QueueRunAsync(
-        Guid projectId, Guid? changeRequestId, OutputStyle style, CancellationToken cancellationToken)
+        Guid projectId, Guid? changeRequestId, OutputStyle style, GenerationScope scope,
+        CancellationToken cancellationToken)
     {
         var run = new GenerationRun
         {
@@ -70,6 +77,9 @@ public sealed class ChangeSubmissionService(
             RequestedByUserId = currentUser.UserId!,
             RequestedByUserName = currentUser.UserName,
             OutputStyle = style,
+            RequestedScope = scope,
+            // Provisional until the worker compares schemas; it may fall back to every table.
+            Scope = scope,
             Status = RunStatus.Queued,
             Stage = RunStage.Queued,
             QueuedUtc = clock.UtcNow

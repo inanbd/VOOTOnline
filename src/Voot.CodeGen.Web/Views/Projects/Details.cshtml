@@ -29,7 +29,14 @@
         <form asp-controller="Runs" asp-action="Regenerate" method="post" class="d-inline">
             @Html.AntiForgeryToken()
             <input type="hidden" name="projectId" value="@Model.Project.Id" />
-            <button type="submit" class="btn btn-outline-secondary btn-sm">Regenerate only</button>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Regenerate without applying SQL">
+                <button type="submit" name="scope" value="@GenerationScope.AllTables"
+                        class="btn @(Model.Project.Settings.DefaultGenerationScope == GenerationScope.AllTables ? "btn-secondary" : "btn-outline-secondary")"
+                        title="Regenerate every table from the current schema">Regenerate all</button>
+                <button type="submit" name="scope" value="@GenerationScope.ChangedTables"
+                        class="btn @(Model.Project.Settings.DefaultGenerationScope == GenerationScope.ChangedTables ? "btn-secondary" : "btn-outline-secondary")"
+                        title="Regenerate only the tables whose structure changed since the last generation">Regenerate changed</button>
+            </div>
         </form>
 
         @if (Model.IsAdministrator)
@@ -77,6 +84,14 @@
                             @if (run.ChangeRequestId is null)
                             {
                                 <div class="small-muted">regenerate only</div>
+                            }
+                            @if (run.Scope == GenerationScope.ChangedTables)
+                            {
+                                <div class="small-muted">changed tables only</div>
+                            }
+                            else if (run.RequestedScope == GenerationScope.ChangedTables && run.Status == RunStatus.Succeeded)
+                            {
+                                <div class="small-muted" title="@run.ScopeNote">changed tables requested; all generated</div>
                             }
                         </td>
                         <td class="small-muted">@run.RequestedByUserName</td>

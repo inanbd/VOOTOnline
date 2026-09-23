@@ -14,7 +14,7 @@
     {
         <text><strong>Transactions are off for this project</strong>, so a failure part way through leaves earlier batches applied.</text>
     }
-    Once it succeeds the schema is re-read and the whole data layer is regenerated.
+    Once it succeeds the schema is re-read and the data layer is regenerated.
 </p>
 
 <form asp-action="Submit" method="post">
@@ -38,6 +38,8 @@
                 </div>
                 <span asp-validation-for="SqlText" class="text-danger"></span>
             </div>
+
+            <partial name="_ScopeChoice" model="Model.Scope" />
         </div>
     </div>
 

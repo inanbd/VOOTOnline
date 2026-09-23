@@ -1,0 +1,20 @@
+@model GenerationScope
+@* Radio buttons posting "Scope"; the model is the pre-selected value. *@
+<fieldset class="mt-3">
+    <legend class="form-label fs-6 mb-1">Tables to generate</legend>
+    <div class="form-check">
+        <input class="form-check-input" type="radio" name="Scope" id="scope-all"
+               value="@GenerationScope.AllTables" checked="@(Model == GenerationScope.AllTables)" />
+        <label class="form-check-label" for="scope-all">All tables</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="radio" name="Scope" id="scope-changed"
+               value="@GenerationScope.ChangedTables" checked="@(Model == GenerationScope.ChangedTables)" />
+        <label class="form-check-label" for="scope-changed">Only tables changed since the last generation</label>
+    </div>
+    <div class="form-text">
+        Changed tables are found by comparing the schema with the one the last successful run
+        generated from, so changes made from the schema page count too. With nothing to compare
+        against, or after the project's settings change, every table is generated instead.
+    </div>
+</fieldset>

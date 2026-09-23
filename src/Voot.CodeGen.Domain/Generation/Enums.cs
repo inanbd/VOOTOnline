@@ -60,3 +60,16 @@ public enum DiagnosticSeverity
     Warning = 1,
     Error = 2
 }
+
+/// <summary>Which tables a generation run produces files for.</summary>
+public enum GenerationScope
+{
+    /// <summary>Every table with a primary key.</summary>
+    AllTables = 0,
+
+    /// <summary>
+    /// Only tables whose structure changed since the project's last successful generation.
+    /// Falls back to every table when there is nothing trustworthy to compare against.
+    /// </summary>
+    ChangedTables = 1
+}

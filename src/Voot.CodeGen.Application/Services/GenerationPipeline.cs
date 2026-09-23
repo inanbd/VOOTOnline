@@ -49,8 +49,11 @@ public sealed class GenerationPipeline(
             }
 
             var database = await ReadSchemaAsync(run, connectionString, cancellationToken);
-            var result = await GenerateAsync(run, database, project.Settings, cancellationToken);
+            var fingerprint = SettingsFingerprint.Compute(project.Settings);
+            var plan = await PlanScopeAsync(run, database, fingerprint, cancellationToken);
+            var result = await GenerateAsync(run, database, project.Settings, plan.Selection, cancellationToken);
             await PackageAsync(run, project, result, cancellationToken);
+            await SaveSnapshotAsync(run, database, fingerprint, result, cancellationToken);
 
             run.Status = RunStatus.Succeeded;
             run.Stage = RunStage.Completed;
@@ -159,14 +162,69 @@ public sealed class GenerationPipeline(
         return database;
     }
 
+    /// <summary>
+    /// Decides which tables to generate. A changed-tables request compares the schema with the
+    /// snapshot of the last successful run, and falls back to every table when it cannot.
+    /// </summary>
+    private async Task<ScopePlan> PlanScopeAsync(
+        GenerationRun run, Domain.Schema.DatabaseModel database, string fingerprint,
+        CancellationToken cancellationToken)
+    {
+        var baseline = run.RequestedScope == GenerationScope.ChangedTables
+            ? await repository.GetLatestSnapshotAsync(run.ProjectId, run.Id, cancellationToken)
+            : null;
+
+        var plan = GenerationScopePlanner.Plan(run.RequestedScope, baseline, database, fingerprint);
+
+        run.Scope = plan.Scope;
+        run.ScopeNote = plan.Note;
+        await repository.UpdateRunAsync(run, cancellationToken);
+
+        if (plan.Note is not null)
+        {
+            await LogAsync(run, RunLogLevel.Information, RunStage.GeneratingCode, plan.Note,
+                cancellationToken: cancellationToken);
+        }
+
+        return plan;
+    }
+
+    /// <summary>
+    /// Records the schema this run generated from, as the baseline for the next changed-tables
+    /// run. The archive is already stored, so a failure here is logged rather than failing the run.
+    /// </summary>
+    private async Task SaveSnapshotAsync(
+        GenerationRun run, Domain.Schema.DatabaseModel database, string fingerprint,
+        GenerationResult result, CancellationToken cancellationToken)
+    {
+        // Tables that failed here are retried by the next changed-tables run even if unchanged.
+        var failedTables = result.Diagnostics
+            .Where(d => d.Severity == DiagnosticSeverity.Error && d.TableName is not null)
+            .Select(d => d.TableName!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        try
+        {
+            var snapshot = SchemaSnapshot.From(database, fingerprint, failedTables, clock.UtcNow);
+            await repository.SaveSnapshotAsync(run.Id, run.ProjectId, snapshot, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            await LogAsync(run, RunLogLevel.Warning, RunStage.PackagingArchive,
+                "The schema snapshot could not be saved; the next changed-tables run will generate every table.",
+                ex.ToString(), cancellationToken: cancellationToken);
+        }
+    }
+
     private async Task<GenerationResult> GenerateAsync(
         GenerationRun run, Domain.Schema.DatabaseModel database, GenerationSettings settings,
-        CancellationToken cancellationToken)
+        TableSelection? selection, CancellationToken cancellationToken)
     {
         run.Stage = RunStage.GeneratingCode;
         await repository.UpdateRunAsync(run, cancellationToken);
 
-        var result = generator.Generate(database, settings);
+        var result = generator.Generate(database, settings, selection);
 
         run.TableCount = result.TableCount;
         run.SkippedTableCount = result.SkippedTableCount;

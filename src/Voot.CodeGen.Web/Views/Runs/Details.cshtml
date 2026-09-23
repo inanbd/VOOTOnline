@@ -55,6 +55,18 @@
             <div class="col-6 col-md-2"><div class="small-muted">Errors</div><div class="fs-5 @(run.ErrorCount > 0 ? "text-danger" : "")">@run.ErrorCount</div></div>
             <div class="col-6 col-md-2"><div class="small-muted">Style</div><div class="fs-5">@run.OutputStyle</div></div>
         </div>
+        <div class="small mt-2">
+            <span class="small-muted">Scope:</span>
+            @(run.Scope == GenerationScope.ChangedTables ? "changed tables only" : "all tables")
+            @if (run.RequestedScope != run.Scope)
+            {
+                <span class="small-muted">(changed tables requested)</span>
+            }
+            @if (!string.IsNullOrWhiteSpace(run.ScopeNote))
+            {
+                <div class="small-muted">@run.ScopeNote</div>
+            }
+        </div>
         @if (Model.Detail.Artifact is { } artifact)
         {
             <hr />

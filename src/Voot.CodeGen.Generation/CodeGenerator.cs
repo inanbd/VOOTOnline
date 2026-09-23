@@ -33,7 +33,8 @@ public sealed class CodeGenerator : ICodeGenerator
         new StoredProcedureEmitter()
     ];
 
-    public GenerationResult Generate(DatabaseModel database, GenerationSettings settings)
+    public GenerationResult Generate(
+        DatabaseModel database, GenerationSettings settings, TableSelection? selection = null)
     {
         ArgumentNullException.ThrowIfNull(database);
         ArgumentNullException.ThrowIfNull(settings);
@@ -43,8 +44,10 @@ public sealed class CodeGenerator : ICodeGenerator
         var diagnostics = new List<GenerationDiagnostic>();
         var generated = 0;
         var skipped = 0;
+        var generatedTables = new List<string>();
 
-        foreach (var table in database.Tables)
+        // Filtering happens here rather than on the model, so emitters still see every table.
+        foreach (var table in database.Tables.Where(t => selection is null || selection.Includes(t)))
         {
             if (!table.HasPrimaryKey)
             {
@@ -69,6 +72,7 @@ public sealed class CodeGenerator : ICodeGenerator
             }
 
             generated++;
+            generatedTables.Add(table.QualifiedName);
 
             foreach (var emitter in _emitters)
             {
@@ -92,14 +96,16 @@ public sealed class CodeGenerator : ICodeGenerator
             }
         }
 
-        files.Add(BuildReadme(context, files, generated, skipped));
+        files.Add(BuildReadme(context, files, generated, skipped, selection, generatedTables));
 
         return new GenerationResult
         {
             Files = files,
             Diagnostics = diagnostics,
             TableCount = generated,
-            SkippedTableCount = skipped
+            SkippedTableCount = skipped,
+            IsPartial = selection is not null,
+            GeneratedTables = generatedTables
         };
     }
 
@@ -108,7 +114,12 @@ public sealed class CodeGenerator : ICodeGenerator
     /// this spells out the framework types the code expects to compile against.
     /// </summary>
     private static GeneratedFile BuildReadme(
-        GenerationContext context, IReadOnlyList<GeneratedFile> files, int generated, int skipped)
+        GenerationContext context,
+        IReadOnlyList<GeneratedFile> files,
+        int generated,
+        int skipped,
+        TableSelection? selection,
+        IReadOnlyList<string> generatedTables)
     {
         var s = context.Settings;
         var writer = new CodeWriter("  ");
@@ -121,7 +132,37 @@ public sealed class CodeGenerator : ICodeGenerator
         writer.Line($"Style     : {s.OutputStyle}");
         writer.Line($"Tables    : {generated} generated, {skipped} skipped");
         writer.Line($"Files     : {files.Count + 1}");
+        writer.Line($"Scope     : {(selection is null ? "all tables" : "changed tables only")}");
         writer.Blank();
+
+        if (selection is not null)
+        {
+            writer.Line("Partial archive");
+            writer.Line("---------------");
+            writer.Line("Only tables whose structure changed since the last generation are included.");
+            writer.Line("Every other table is unchanged. Copy the files under Bases folders, the lists and");
+            writer.Line("the procedure scripts over your existing ones. Take the hand-editable partials only");
+            writer.Line("for tables that are new, so hand-written code is not overwritten.");
+            writer.Blank();
+
+            foreach (var table in generatedTables)
+            {
+                writer.Line($"  {table}");
+            }
+
+            if (selection.DroppedTables.Count > 0)
+            {
+                writer.Blank();
+                writer.Line("Dropped since the last generation; delete their generated files:");
+
+                foreach (var table in selection.DroppedTables)
+                {
+                    writer.Line($"  {table}");
+                }
+            }
+
+            writer.Blank();
+        }
 
         writer.Line("Layout");
         writer.Line("------");

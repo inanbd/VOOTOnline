@@ -1,4 +1,7 @@
+using System.IO.Compression;
+using System.Text.Json;
 using Dapper;
+using Voot.CodeGen.Application.Models;
 using Voot.CodeGen.Application.Abstractions;
 using Voot.CodeGen.Domain.Generation;
 using Voot.CodeGen.Infrastructure.Data;
@@ -208,12 +211,12 @@ public sealed class GenerationRepository(ISqlConnectionFactory connectionFactory
                 ([Id], [ProjectId], [ChangeRequestId], [RequestedByUserId], [RequestedByUserName],
                  [Status], [Stage], [OutputStyle], [QueuedUtc], [StartedUtc], [CompletedUtc],
                  [TableCount], [SkippedTableCount], [FileCount], [WarningCount], [ErrorCount],
-                 [ErrorMessage], [ErrorDetail], [ArtifactId])
+                 [ErrorMessage], [ErrorDetail], [ArtifactId], [RequestedScope], [Scope], [ScopeNote])
             VALUES
                 (@Id, @ProjectId, @ChangeRequestId, @RequestedByUserId, @RequestedByUserName,
                  @Status, @Stage, @OutputStyle, @QueuedUtc, @StartedUtc, @CompletedUtc,
                  @TableCount, @SkippedTableCount, @FileCount, @WarningCount, @ErrorCount,
-                 @ErrorMessage, @ErrorDetail, @ArtifactId);
+                 @ErrorMessage, @ErrorDetail, @ArtifactId, @RequestedScope, @Scope, @ScopeNote);
             """,
             run,
             cancellationToken: cancellationToken));
@@ -237,7 +240,9 @@ public sealed class GenerationRepository(ISqlConnectionFactory connectionFactory
                 [ErrorCount] = @ErrorCount,
                 [ErrorMessage] = @ErrorMessage,
                 [ErrorDetail] = @ErrorDetail,
-                [ArtifactId] = @ArtifactId
+                [ArtifactId] = @ArtifactId,
+                [Scope] = @Scope,
+                [ScopeNote] = @ScopeNote
             WHERE [Id] = @Id;
             """,
             run,
@@ -294,6 +299,84 @@ public sealed class GenerationRepository(ISqlConnectionFactory connectionFactory
             cancellationToken: cancellationToken));
 
         return [.. rows];
+    }
+
+    // ---- schema snapshots --------------------------------------------------------------
+
+    private static readonly JsonSerializerOptions SnapshotJson = new(JsonSerializerDefaults.Web);
+
+    public async Task SaveSnapshotAsync(
+        Guid runId, Guid projectId, SchemaSnapshot snapshot, CancellationToken cancellationToken = default)
+    {
+        byte[] payload;
+
+        using (var buffer = new MemoryStream())
+        {
+            await using (var gzip = new GZipStream(buffer, CompressionLevel.Optimal, leaveOpen: true))
+            {
+                await JsonSerializer.SerializeAsync(gzip, snapshot, SnapshotJson, cancellationToken);
+            }
+
+            payload = buffer.ToArray();
+        }
+
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            // Only the latest successful run is ever compared against, so older ones go.
+            await connection.ExecuteAsync(new CommandDefinition(
+                """
+                DELETE FROM [dbo].[RunSchemaSnapshots] WHERE [ProjectId] = @projectId;
+                INSERT INTO [dbo].[RunSchemaSnapshots] ([RunId], [ProjectId], [CapturedUtc], [Snapshot])
+                VALUES (@runId, @projectId, @capturedUtc, @payload);
+                """,
+                new { runId, projectId, capturedUtc = snapshot.CapturedUtc, payload },
+                transaction,
+                cancellationToken: cancellationToken));
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<SchemaSnapshot?> GetLatestSnapshotAsync(
+        Guid projectId, Guid excludingRunId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+
+        var payload = await connection.QuerySingleOrDefaultAsync<byte[]>(new CommandDefinition(
+            """
+            SELECT TOP 1 s.[Snapshot]
+            FROM [dbo].[RunSchemaSnapshots] s
+            INNER JOIN [dbo].[GenerationRuns] r ON r.[Id] = s.[RunId]
+            WHERE s.[ProjectId] = @projectId AND s.[RunId] <> @excludingRunId AND r.[Status] = @succeeded
+            ORDER BY s.[CapturedUtc] DESC;
+            """,
+            new { projectId, excludingRunId, succeeded = (int)RunStatus.Succeeded },
+            cancellationToken: cancellationToken));
+
+        if (payload is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var buffer = new MemoryStream(payload);
+            await using var gzip = new GZipStream(buffer, CompressionMode.Decompress);
+            return await JsonSerializer.DeserializeAsync<SchemaSnapshot>(gzip, SnapshotJson, cancellationToken);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidDataException)
+        {
+            // An unreadable snapshot is treated as no baseline: the run then generates every table.
+            return null;
+        }
     }
 
     // ---- logs -------------------------------------------------------------------------

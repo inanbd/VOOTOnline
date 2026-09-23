@@ -24,9 +24,10 @@ which changes have reached development and production.
 
 - A user submits a **SQL change** against a project. It runs against that project's database,
   in a single transaction by default, and the script is kept permanently as the audit record.
-- When the change succeeds, the application re-reads the schema and **regenerates code for every
-  table**. A table that cannot be generated is reported and skipped rather than failing the
-  whole run.
+- When the change succeeds, the application re-reads the schema and **regenerates the code**. A
+  table that cannot be generated is reported and skipped rather than failing the whole run.
+- Each run generates either **all tables** or **only the tables that changed** since the last
+  successful generation. The choice is made per run, pre-set from a project default.
 - The result is **zipped, stored and downloadable**, and stays re-downloadable from the
   project's history.
 - A project can also be **regenerated** from its current schema without applying any SQL.
@@ -80,6 +81,27 @@ For each run the worker:
    layer calls always match the procedures the scripts create.
 4. **Packages the archive**, writes it to storage, and records a SHA-256 hash and the list of
    files it contains.
+5. **Saves a snapshot of the schema** it generated from, as the baseline for the next
+   changed-tables run.
+
+### Generating only changed tables
+
+A changed-tables run compares the schema it just read with the snapshot saved by the last
+successful run. It generates a table if the table is new, if its columns or primary key changed
+(type, size, nullability, identity, default), or if its foreign keys changed. Renaming a
+constraint does not count. A table that failed to generate last time is included again.
+Because the comparison is against the database itself, changes made from the schema page count
+too, not only submitted changes.
+
+The archive then holds only those tables. Its `README.txt` lists them, along with any tables
+dropped since the baseline, whose files should be deleted. The rest of the schema is still read,
+so relationships to tables outside the archive come out the same as in a full run.
+
+The run falls back to every table, and says why on the run page and in its log, when:
+
+- there is no earlier successful run to compare against;
+- the project's generation settings changed since then, since that can change every file; or
+- no table changed.
 
 If the application restarts mid-run, queued runs are picked up again. Runs that were already
 executing are marked failed rather than replayed, because their SQL may already have been

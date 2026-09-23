@@ -97,6 +97,12 @@ public sealed class GenerationSettings
 
     public OutputStyle OutputStyle { get; set; } = OutputStyle.Legacy;
 
+    /// <summary>
+    /// The scope pre-selected when a run is started; each run can still override it. Defaults to
+    /// every table so existing projects behave as before.
+    /// </summary>
+    public GenerationScope DefaultGenerationScope { get; set; } = GenerationScope.AllTables;
+
     /// <summary>Run the submitted SQL inside a transaction and roll back on failure.</summary>
     public bool UseTransactionForSql { get; set; } = true;
 

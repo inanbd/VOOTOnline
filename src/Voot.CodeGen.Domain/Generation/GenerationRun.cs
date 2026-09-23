@@ -25,6 +25,19 @@ public sealed class GenerationRun
 
     public OutputStyle OutputStyle { get; set; }
 
+    /// <summary>The scope the user asked for.</summary>
+    public GenerationScope RequestedScope { get; set; }
+
+    /// <summary>
+    /// The scope the run actually used. A changed-tables request falls back to every table when
+    /// there is no earlier generation to compare against, when output-affecting settings
+    /// changed, or when no structure changed; <see cref="ScopeNote"/> says which.
+    /// </summary>
+    public GenerationScope Scope { get; set; }
+
+    /// <summary>Why the effective scope differs from the request, or what a partial run covered.</summary>
+    public string? ScopeNote { get; set; }
+
     public DateTimeOffset QueuedUtc { get; set; } = DateTimeOffset.UtcNow;
 
     public DateTimeOffset? StartedUtc { get; set; }

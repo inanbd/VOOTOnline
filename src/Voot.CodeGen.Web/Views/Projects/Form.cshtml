@@ -69,6 +69,16 @@
                     </div>
                 </div>
                 <div class="col-md-4 mb-3">
+                    <label asp-for="Settings.DefaultGenerationScope" class="form-label">Default tables to generate</label>
+                    <select asp-for="Settings.DefaultGenerationScope" class="form-select">
+                        <option value="@GenerationScope.AllTables">All tables</option>
+                        <option value="@GenerationScope.ChangedTables">Only changed tables</option>
+                    </select>
+                    <div class="form-text">
+                        Pre-selected for each run; it can be changed per run.
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
                     <label asp-for="Settings.RootBase" class="form-label">Root namespace / folder</label>
                     <input asp-for="Settings.RootBase" class="form-control mono" />
                 </div>
