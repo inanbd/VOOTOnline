@@ -23,7 +23,9 @@ public sealed class RunsController(
             ProjectName = project.Name,
             ConnectionStringSummary = project.ConnectionStringSummary,
             UsesTransaction = project.Settings.UseTransactionForSql,
-            Scope = project.Settings.DefaultGenerationScope
+            // Applying a change usually touches a few tables, so default to just those. With no
+            // baseline to compare against, the run still falls back to every table.
+            Scope = GenerationScope.ChangedTables
         });
     }
 

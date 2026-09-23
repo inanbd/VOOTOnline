@@ -27,7 +27,7 @@ which changes have reached development and production.
 - When the change succeeds, the application re-reads the schema and **regenerates the code**. A
   table that cannot be generated is reported and skipped rather than failing the whole run.
 - Each run generates either **all tables** or **only the tables that changed** since the last
-  successful generation. The choice is made per run, pre-set from a project default.
+  successful generation. The choice is made per run; the Apply SQL page starts on changed tables.
 - The result is **zipped, stored and downloadable**, and stays re-downloadable from the
   project's history.
 - A project can also be **regenerated** from its current schema without applying any SQL.

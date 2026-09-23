@@ -24,8 +24,8 @@ public sealed class SubmitChangeViewModel
 
     public bool UsesTransaction { get; set; } = true;
 
-    /// <summary>Which tables to generate once the SQL succeeds; pre-set from the project default.</summary>
-    public GenerationScope Scope { get; set; }
+    /// <summary>Which tables to generate once the SQL succeeds; pre-set to changed tables only.</summary>
+    public GenerationScope Scope { get; set; } = GenerationScope.ChangedTables;
 }
 
 public sealed class RunDetailViewModel
