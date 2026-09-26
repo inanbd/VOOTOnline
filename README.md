@@ -16,6 +16,13 @@ which changes have reached development and production.
 - An administrator creates a **project**: a target SQL Server database (its connection string is
   encrypted at rest) plus the options that shape the generated code — namespaces, folder layout,
   table prefix, which stored procedures to emit, and the output style.
+- The database can be an **existing one**, given by its connection string, or a **new one**
+  that the application creates on a server configured for the purpose. For a new database the
+  administrator only types its name.
+- A **SQL file** can be uploaded with the new project. It runs as the project's first change —
+  recorded in its history and trackers like any other — and code is then generated for every
+  table. If it fails, the project is kept and the run shows the error, so the script can be
+  fixed and applied again. Files saved as UTF-8 or as Unicode (UTF-16) are both read.
 - Administrators reach every project. Other users reach only the projects they are assigned to.
 - Administrators manage accounts: create users, grant or revoke the administrator role, disable
   accounts and reset passwords. The last active administrator cannot be removed.
@@ -207,6 +214,7 @@ secrets, never a committed settings file.
 | `ArtifactStorage:RootPath` | Where generated archives are written (default `App_Data/artifacts`) |
 | `ArtifactStorage:RetentionDays` | Days to keep archive files; `0` keeps them forever |
 | `SeedAdministrator:UserName` / `:Password` | The first administrator, created only if none exists |
+| `DatabaseProvisioning:ServerConnectionString` | The server new project databases are created on. Its login needs permission to create databases (for example the `dbcreator` role); any database named in it is ignored. Leave empty to offer existing databases only |
 
 ### Tests
 
@@ -220,6 +228,11 @@ dotnet test
   project's own database, whose connection string only an administrator can set, and every
   script is recorded against the user who submitted it before it runs. Point projects at
   development or staging databases.
+- **New databases are created only on the configured server**, with the configured login, and
+  their names are limited to letters, digits and underscores. An uploaded script that contains
+  `USE` or `CREATE`/`ALTER`/`DROP DATABASE` is rejected before anything is created, so it cannot
+  run against a different database on the same server; scripts exported from SQL Server
+  Management Studio usually start with `USE` and need that line removed.
 - **Connection strings are encrypted** with ASP.NET Core Data Protection, so a backup of the
   application database alone does not reveal them. Pages only ever show a redacted summary.
 - **Access is checked on every project action.** A user who is not assigned to a project cannot

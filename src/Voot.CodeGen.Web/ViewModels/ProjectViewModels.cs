@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Voot.CodeGen.Application.Abstractions;
+using Voot.CodeGen.Application.Services;
 using Voot.CodeGen.Domain.Generation;
 using Voot.CodeGen.Domain.Projects;
 
@@ -36,6 +37,30 @@ public sealed class ProjectFormViewModel
     public GenerationSettings Settings { get; set; } = new();
 
     public bool IsEdit => Id.HasValue;
+
+    // ---- creating only ----
+
+    /// <summary>Whether the project uses an existing database or gets a new one.</summary>
+    public ProjectDatabaseMode DatabaseMode { get; set; } = ProjectDatabaseMode.Existing;
+
+    [Display(Name = "New database name")]
+    [StringLength(DatabaseNameRule.MaxLength)]
+    public string? NewDatabaseName { get; set; }
+
+    /// <summary>An optional script applied as the project's first change.</summary>
+    [Display(Name = "SQL file (optional)")]
+    public IFormFile? SqlFile { get; set; }
+
+    /// <summary>
+    /// The file chosen on a submission that was rejected. Browsers cannot re-fill a file input,
+    /// so the form asks for it again by name.
+    /// </summary>
+    public string? RejectedSqlFileName { get; set; }
+
+    /// <summary>False when no server is configured for new databases.</summary>
+    public bool CanCreateDatabases { get; set; }
+
+    public string? DatabaseServerName { get; set; }
 }
 
 public sealed class ProjectListItemViewModel

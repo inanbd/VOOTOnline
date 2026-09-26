@@ -38,6 +38,7 @@ public static class DependencyInjection
 
         services.Configure<ArtifactStorageOptions>(configuration.GetSection("ArtifactStorage"));
         services.Configure<SeedAdministratorOptions>(configuration.GetSection("SeedAdministrator"));
+        services.Configure<DatabaseProvisioningOptions>(configuration.GetSection("DatabaseProvisioning"));
 
         // ---- application ports ----
         services.AddSingleton<IClock, SystemClock>();
@@ -45,6 +46,7 @@ public static class DependencyInjection
         services.AddSingleton<ISchemaReader, SqlServerSchemaReader>();
         services.AddSingleton<ICodeGenerator, CodeGenerator>();
         services.AddScoped<ISqlScriptExecutor, SqlScriptExecutor>();
+        services.AddSingleton<IDatabaseProvisioner, SqlDatabaseProvisioner>();
         services.AddScoped<IConnectionStringProtector, ConnectionStringProtector>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<IGenerationRepository, GenerationRepository>();
@@ -61,6 +63,7 @@ public static class DependencyInjection
         // ---- application services ----
         services.AddScoped<ProjectAccessService>();
         services.AddScoped<ProjectService>();
+        services.AddScoped<ProjectSetupService>();
         services.AddScoped<ChangeSubmissionService>();
         services.AddScoped<RunHistoryService>();
         services.AddScoped<SchemaBrowsingService>();

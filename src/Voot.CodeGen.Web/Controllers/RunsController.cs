@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Voot.CodeGen.Application.Services;
 using Voot.CodeGen.Domain.Generation;
+using Voot.CodeGen.Web.Filters;
 using Voot.CodeGen.Web.ViewModels;
 
 namespace Voot.CodeGen.Web.Controllers;
@@ -38,8 +39,8 @@ public sealed class RunsController(
             return await RedisplaySubmitAsync(model, cancellationToken);
         }
 
-        var runId = await submissions.SubmitAsync(
-            model.ProjectId, model.SqlText, model.Title, model.Scope, cancellationToken);
+        var runId = await this.TryDomainAsync(() => submissions.SubmitAsync(
+            model.ProjectId, model.SqlText, model.Title, model.Scope, cancellationToken));
 
         if (!ModelState.IsValid)
         {

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Routing;
 using Voot.CodeGen.Domain.Generation;
 using Voot.CodeGen.Domain.Projects;
 using Voot.CodeGen.Generation.Naming;
+using Voot.CodeGen.Web.Filters;
 using Voot.CodeGen.Web.Security;
 using Voot.CodeGen.Web.ViewModels;
 
@@ -13,6 +14,7 @@ namespace Voot.CodeGen.Web.Controllers;
 
 public sealed class ProjectsController(
     ProjectService projects,
+    ProjectSetupService setup,
     ProjectAccessService access,
     RunHistoryService history,
     SchemaBrowsingService schema,
@@ -68,7 +70,7 @@ public sealed class ProjectsController(
         CancellationToken cancellationToken = default)
     {
         var selected = tables ?? [];
-        var result = await schemaChanges.ExecuteAsync(id, sqlText, title, cancellationToken);
+        var result = await this.TryDomainAsync(() => schemaChanges.ExecuteAsync(id, sqlText, title, cancellationToken));
 
         // A domain rule may have rejected the request before anything ran.
         if (!ModelState.IsValid)
@@ -81,7 +83,7 @@ public sealed class ProjectsController(
 
         // Reuse the snapshot the service already read rather than querying the catalog again.
         var project = await access.RequireAccessAsync(id, cancellationToken);
-        var structure = SchemaBrowsingService.BuildStructure(project, result.Schema, selected, all);
+        var structure = SchemaBrowsingService.BuildStructure(project, result!.Schema, selected, all);
         var model = await BuildSchemaViewAsync(id, structure, selected, all, cancellationToken);
 
         return View("Schema", model with
@@ -165,36 +167,129 @@ public sealed class ProjectsController(
         return RedirectToAction(nameof(Schema), route);
     }
 
+    /// <summary>Largest SQL file accepted when creating a project.</summary>
+    public const int MaxSqlFileBytes = 20 * 1024 * 1024;
+
     [Authorize(Policy = AuthorizationPolicies.Administrator)]
     [HttpGet]
-    public IActionResult Create() => View("Form", new ProjectFormViewModel());
+    public IActionResult Create() => View("Form", WithSetupOptions(new ProjectFormViewModel()));
 
+    /// <summary>
+    /// Creates a project against an existing database or a new one, and applies an uploaded
+    /// SQL file as its first change. With a file, the browser goes to that run's page.
+    /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Administrator)]
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequestSizeLimit(MaxSqlFileBytes + 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxSqlFileBytes + 1024 * 1024)]
     public async Task<IActionResult> Create(ProjectFormViewModel model, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(model.ConnectionString))
+        WithSetupOptions(model);
+
+        if (model.DatabaseMode == ProjectDatabaseMode.Existing && string.IsNullOrWhiteSpace(model.ConnectionString))
         {
             ModelState.AddModelError(nameof(model.ConnectionString), "A connection string is required.");
         }
 
-        if (!ModelState.IsValid)
+        if (model.DatabaseMode == ProjectDatabaseMode.New &&
+            DatabaseNameRule.Validate(model.NewDatabaseName?.Trim()) is { } nameError)
         {
-            return View("Form", model);
+            ModelState.AddModelError(nameof(model.NewDatabaseName), nameError);
         }
 
-        var id = await projects.CreateAsync(
-            model.Name, model.Description, model.ConnectionString!, model.Settings, cancellationToken);
+        var script = await ReadSqlFileAsync(model.SqlFile, cancellationToken);
+
+        if (!ModelState.IsValid)
+        {
+            return RedisplayCreate(model);
+        }
+
+        var result = await this.TryDomainAsync(() => setup.CreateAsync(
+            new ProjectSetupRequest
+            {
+                Name = model.Name,
+                Description = model.Description,
+                Settings = model.Settings,
+                DatabaseMode = model.DatabaseMode,
+                ConnectionString = model.ConnectionString,
+                NewDatabaseName = model.NewDatabaseName?.Trim(),
+                Script = script,
+                ScriptFileName = model.SqlFile?.FileName
+            },
+            cancellationToken));
 
         // A domain rule may have rejected the request; the filter puts the message in ModelState.
         if (!ModelState.IsValid)
         {
-            return View("Form", model);
+            return RedisplayCreate(model);
         }
 
-        TempData["Status"] = $"Project '{model.Name}' created.";
-        return RedirectToAction(nameof(Details), new { id });
+        var created = result!.CreatedDatabase is null
+            ? $"Project '{model.Name}' created."
+            : $"Project '{model.Name}' created with the new database '{result.CreatedDatabase}' on {setup.DatabaseServerName}.";
+
+        if (result.RunId is { } runId)
+        {
+            TempData["Status"] = $"{created} Applying '{Path.GetFileName(model.SqlFile!.FileName)}' as its first change.";
+            return RedirectToAction("Details", "Runs", new { id = runId });
+        }
+
+        TempData["Status"] = created;
+        return RedirectToAction(nameof(Details), new { id = result.ProjectId });
+    }
+
+    /// <summary>
+    /// Reads an uploaded script as text. Byte order marks are honoured, so files saved by SQL
+    /// Server Management Studio as UTF-16 read correctly; anything without one is read as UTF-8.
+    /// </summary>
+    private async Task<string?> ReadSqlFileAsync(IFormFile? file, CancellationToken cancellationToken)
+    {
+        if (file is null)
+        {
+            return null;
+        }
+
+        const string field = nameof(ProjectFormViewModel.SqlFile);
+
+        if (!string.Equals(Path.GetExtension(file.FileName), ".sql", StringComparison.OrdinalIgnoreCase))
+        {
+            ModelState.AddModelError(field, "Upload a .sql file.");
+            return null;
+        }
+
+        if (file.Length > MaxSqlFileBytes)
+        {
+            ModelState.AddModelError(field, $"The SQL file can be at most {MaxSqlFileBytes / (1024 * 1024)} MB.");
+            return null;
+        }
+
+        using var reader = new StreamReader(
+            file.OpenReadStream(), System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        var text = await reader.ReadToEndAsync(cancellationToken);
+
+        // UTF-16 without a byte order mark reads as text full of NULs.
+        if (text.Contains('\0'))
+        {
+            ModelState.AddModelError(field,
+                "The SQL file's text encoding could not be read. Save it as UTF-8, or as Unicode with a byte order mark, and upload it again.");
+            return null;
+        }
+
+        return text;
+    }
+
+    private ProjectFormViewModel WithSetupOptions(ProjectFormViewModel model)
+    {
+        model.CanCreateDatabases = setup.CanCreateDatabases;
+        model.DatabaseServerName = setup.DatabaseServerName;
+        return model;
+    }
+
+    private ViewResult RedisplayCreate(ProjectFormViewModel model)
+    {
+        model.RejectedSqlFileName = model.SqlFile is null ? null : Path.GetFileName(model.SqlFile.FileName);
+        return View("Form", model);
     }
 
     [Authorize(Policy = AuthorizationPolicies.Administrator)]
@@ -227,8 +322,8 @@ public sealed class ProjectsController(
         }
 
         // A blank connection string means "keep the stored one".
-        await projects.UpdateAsync(
-            id, model.Name, model.Description, model.ConnectionString, model.Settings, model.IsActive, cancellationToken);
+        await this.TryDomainAsync(() => projects.UpdateAsync(
+            id, model.Name, model.Description, model.ConnectionString, model.Settings, model.IsActive, cancellationToken));
 
         if (!ModelState.IsValid)
         {

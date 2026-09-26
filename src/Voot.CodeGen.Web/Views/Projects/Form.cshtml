@@ -5,7 +5,8 @@
 
 <h1 class="h4 mb-3">@ViewData["Title"]</h1>
 
-<form asp-action="@(Model.IsEdit ? "Edit" : "Create")" asp-route-id="@Model.Id" method="post">
+<form asp-action="@(Model.IsEdit ? "Edit" : "Create")" asp-route-id="@Model.Id" method="post"
+      enctype="@(Model.IsEdit ? "application/x-www-form-urlencoded" : "multipart/form-data")">
     <div asp-validation-summary="All" class="text-danger mb-3"></div>
 
     <div class="card">
@@ -23,26 +24,94 @@
                 </div>
             </div>
 
-            <div class="mb-3">
-                <label asp-for="ConnectionString" class="form-label"></label>
-                <input asp-for="ConnectionString" class="form-control mono" autocomplete="off"
-                       placeholder="Server=...;Database=...;User ID=...;Password=..." />
-                @if (Model.IsEdit)
-                {
+            @if (Model.IsEdit)
+            {
+                <div class="mb-3">
+                    <label asp-for="ConnectionString" class="form-label"></label>
+                    <input asp-for="ConnectionString" class="form-control mono" autocomplete="off"
+                           placeholder="Server=...;Database=...;User ID=...;Password=..." />
                     <div class="form-text">
                         Currently <span class="mono">@Model.ConnectionStringSummary</span>.
                         Leave blank to keep it.
                     </div>
-                }
-                else
-                {
+                    <span asp-validation-for="ConnectionString" class="text-danger"></span>
+                </div>
+            }
+            else
+            {
+                <fieldset class="mb-3">
+                    <legend class="form-label fs-6 mb-1">Database</legend>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="DatabaseMode" id="db-existing"
+                               value="@ProjectDatabaseMode.Existing" checked="@(Model.DatabaseMode == ProjectDatabaseMode.Existing)" />
+                        <label class="form-check-label" for="db-existing">Use an existing database</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="DatabaseMode" id="db-new"
+                               value="@ProjectDatabaseMode.New" checked="@(Model.DatabaseMode == ProjectDatabaseMode.New)"
+                               disabled="@(!Model.CanCreateDatabases)" />
+                        <label class="form-check-label" for="db-new">
+                            Create a new database
+                            @if (Model.CanCreateDatabases)
+                            {
+                                <span class="small-muted">on <span class="mono">@Model.DatabaseServerName</span></span>
+                            }
+                        </label>
+                        @if (!Model.CanCreateDatabases)
+                        {
+                            <div class="form-text">
+                                Not available: no server is configured for new databases
+                                (<span class="mono">DatabaseProvisioning:ServerConnectionString</span>).
+                            </div>
+                        }
+                    </div>
+                </fieldset>
+
+                <div class="mb-3" data-db-mode="@ProjectDatabaseMode.Existing">
+                    <label asp-for="ConnectionString" class="form-label"></label>
+                    <input asp-for="ConnectionString" class="form-control mono" autocomplete="off"
+                           placeholder="Server=...;Database=...;User ID=...;Password=..." />
                     <div class="form-text">
                         Stored encrypted. Submitted SQL runs against this database, so it should
                         point at a development or staging server, not production.
                     </div>
+                    <span asp-validation-for="ConnectionString" class="text-danger"></span>
+                </div>
+
+                @if (Model.CanCreateDatabases)
+                {
+                    <div class="mb-3" data-db-mode="@ProjectDatabaseMode.New">
+                        <label asp-for="NewDatabaseName" class="form-label"></label>
+                        <input asp-for="NewDatabaseName" class="form-control mono" autocomplete="off" placeholder="SalesDev" />
+                        <div class="form-text">
+                            Created empty on <span class="mono">@Model.DatabaseServerName</span> with the
+                            configured login, and used as this project's connection. Letters, digits and
+                            underscores, starting with a letter. The name must not be in use on the server.
+                        </div>
+                        <span asp-validation-for="NewDatabaseName" class="text-danger"></span>
+                    </div>
                 }
-                <span asp-validation-for="ConnectionString" class="text-danger"></span>
-            </div>
+
+                <div class="mb-3">
+                    <label asp-for="SqlFile" class="form-label"></label>
+                    <input asp-for="SqlFile" type="file" class="form-control" accept=".sql" />
+                    @if (Model.RejectedSqlFileName is not null)
+                    {
+                        <div class="text-warning small mt-1">
+                            Choose <span class="mono">@Model.RejectedSqlFileName</span> again; browsers
+                            clear file choices when a form is shown again.
+                        </div>
+                    }
+                    <div class="form-text">
+                        Runs against the database as the project's first change, recorded in its history
+                        and trackers like any other, then code is generated for every table. Up to
+                        @(Voot.CodeGen.Web.Controllers.ProjectsController.MaxSqlFileBytes / (1024 * 1024)) MB. The script must not contain
+                        <code>USE</code> or <code>CREATE</code>/<code>ALTER</code>/<code>DROP DATABASE</code>
+                        statements; remove them from scripts exported by Management Studio.
+                    </div>
+                    <span asp-validation-for="SqlFile" class="text-danger"></span>
+                </div>
+            }
 
             @if (Model.IsEdit)
             {
@@ -178,4 +247,21 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    @if (!Model.IsEdit)
+    {
+        <script>
+            // Show only the fields for the chosen database option.
+            (function () {
+                const radios = document.querySelectorAll('input[name="DatabaseMode"]');
+                const sync = () => {
+                    const mode = document.querySelector('input[name="DatabaseMode"]:checked')?.value;
+                    document.querySelectorAll('[data-db-mode]').forEach(el => {
+                        el.hidden = el.dataset.dbMode !== mode;
+                    });
+                };
+                radios.forEach(r => r.addEventListener('change', sync));
+                sync();
+            })();
+        </script>
+    }
 }
