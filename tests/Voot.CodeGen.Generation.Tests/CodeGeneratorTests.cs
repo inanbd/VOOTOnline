@@ -154,6 +154,18 @@ public class CodeGeneratorTests
     }
 
     [Fact]
+    public void Legacy_equality_uses_an_as_cast_that_compiles_on_csharp_7()
+    {
+        // `obj is not User other` is C# 9; Legacy output targets .NET Framework at C# 7.
+        var legacy = File(Run(OutputStyle.Legacy), "HS/Entities/Bases/User.cs");
+        Assert.Contains("User other = obj as User;", legacy, StringComparison.Ordinal);
+        Assert.Contains("if (other == null)", legacy, StringComparison.Ordinal);
+
+        var modern = File(Run(OutputStyle.Modern), "HS/Entities/Bases/User.cs");
+        Assert.Contains("if (obj is not User other)", modern, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Modern_style_drops_wcf_contracts_and_uses_file_scoped_namespaces()
     {
         var result = Run(OutputStyle.Modern);
@@ -199,6 +211,6 @@ public class CodeGeneratorTests
         var result = Run();
 
         Assert.False(result.HasErrors);
-        Assert.Equal(4, result.TableCount);
+        Assert.Equal(5, result.TableCount);
     }
 }

@@ -55,7 +55,7 @@ public sealed class MainBusinessManagerEmitter : EmitterBase
 
                 writer.Blank();
 
-                WriteInsert(writer, className, accessName, objectVar, contextName);
+                WriteInsert(writer, className, accessName, objectVar, primaryKey, primaryKeyType, contextName);
                 WriteUpdateBase(writer, className, accessName, objectVar, primaryKey, contextName);
                 WriteDelete(writer, accessName, primaryKey, primaryKeyType, contextName);
                 WriteGet(writer, context, table, className, accessName, objectVar, primaryKey, primaryKeyType, contextName, nullable);
@@ -73,17 +73,20 @@ public sealed class MainBusinessManagerEmitter : EmitterBase
     }
 
     private static void WriteInsert(
-        CodeWriter writer, string className, string accessName, string objectVar, string contextName)
+        CodeWriter writer, string className, string accessName, string objectVar,
+        ColumnModel primaryKey, string primaryKeyType, string contextName)
     {
         using (writer.Region("Insert Method"))
         {
-            WriteSummary(writer, $"Inserts a new {className}.");
-            using (writer.Block($"private bool Insert({className} {objectVar})"))
+            WriteSummary(
+                writer,
+                $"Inserts a new {className} and returns its {primaryKey.Name}, which is also set on the object.",
+                $"<returns>The {primaryKey.Name} of the inserted row.</returns>");
+            using (writer.Block($"public {primaryKeyType} Insert({className} {objectVar})"))
             {
                 using (writer.Block($"using ({accessName} data = new {accessName}({contextName}))"))
                 {
-                    writer.Line($"long result = data.Insert({objectVar});");
-                    writer.Line("return result > 0;");
+                    writer.Line($"return data.Insert({objectVar});");
                 }
             }
         }
@@ -105,8 +108,13 @@ public sealed class MainBusinessManagerEmitter : EmitterBase
             {
                 using (writer.Block($"switch ({objectVar}.RowState)"))
                 {
+                    // Insert returns the new key, which says nothing about success for every key
+                    // type; the data access marks the row NormalRow only once it is stored.
                     writer.Line("case BaseBusinessEntity.RowStateEnum.NewRow:");
-                    writer.Indent().Line($"return Insert({objectVar});").Outdent();
+                    writer.Indent()
+                        .Line($"Insert({objectVar});")
+                        .Line($"return {objectVar}.RowState == BaseBusinessEntity.RowStateEnum.NormalRow;")
+                        .Outdent();
                     writer.Line("case BaseBusinessEntity.RowStateEnum.DeletedRow:");
                     writer.Indent().Line($"return Delete({objectVar}.{primaryKey.Name});").Outdent();
                 }

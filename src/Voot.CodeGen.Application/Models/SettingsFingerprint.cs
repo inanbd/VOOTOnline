@@ -3,18 +3,22 @@ using System.Text;
 using System.Text.Json;
 using Voot.CodeGen.Domain.Generation;
 using Voot.CodeGen.Domain.Projects;
+using Voot.CodeGen.Generation;
 
 namespace Voot.CodeGen.Application.Models;
 
 /// <summary>
-/// A hash of the generation settings that affect the generated files. Two runs with the same
-/// fingerprint would produce identical output for an unchanged table.
+/// A hash of the generation settings that affect the generated files, and of the generator's
+/// output version. Two runs with the same fingerprint would produce identical output for an
+/// unchanged table.
 /// </summary>
 public static class SettingsFingerprint
 {
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
 
-    public static string Compute(GenerationSettings settings)
+    public static string Compute(GenerationSettings settings) => Compute(settings, CodeGenerator.OutputVersion);
+
+    internal static string Compute(GenerationSettings settings, int outputVersion)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
@@ -24,7 +28,7 @@ public static class SettingsFingerprint
         output.UseTransactionForSql = true;
         output.DefaultGenerationScope = GenerationScope.AllTables;
 
-        var json = JsonSerializer.Serialize(output, Options);
+        var json = $"{outputVersion}:{JsonSerializer.Serialize(output, Options)}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
     }
 }

@@ -180,45 +180,90 @@ public abstract class DataAccessEmitterBase : EmitterBase
         string objectVar, ColumnModel primaryKey, string primaryKeyType)
     {
         var upper = context.Names.UpperCaseClassName(table);
+        var keySource = NameResolver.InsertKeySourceOf(primaryKey);
+        var key = primaryKey.Name;
+        var readKey = $"{objectVar}.{key} = ({primaryKeyType})GetOutParameter(cmd, {baseEntity}.Property_{key});";
+
+        string[] summary = keySource switch
+        {
+            InsertKeySource.Identity =>
+                [$"Inserts a {className}. The database assigns its {key}, which is set on the object."],
+            InsertKeySource.ColumnDefault =>
+                [$"Inserts a {className}. When its {key} is not set, the column default assigns one,", "which is set on the object."],
+            _ => [$"Inserts a {className} with the {key} it carries."]
+        };
 
         using (writer.Region("Insert Method"))
         {
-            WriteSummary(writer, $"Inserts a {className}.", "<returns>Number of rows affected.</returns>");
-            using (writer.Block($"public long Insert({baseEntity} {objectVar})"))
+            WriteSummary(writer,
+            [
+                .. summary,
+                $"<returns>The {key} of the inserted row, or the object's unchanged {key} when no row is inserted.</returns>"
+            ]);
+            using (writer.Block($"public {primaryKeyType} Insert({baseEntity} {objectVar})"))
             {
                 using (writer.Block("try"))
                 {
                     writer.Line($"SqlCommand cmd = GetSPCommand(INSERT{upper});");
                     writer.Blank();
 
-                    if (primaryKey.IsIdentity)
+                    switch (keySource)
                     {
-                        writer.Line($"AddParameter(cmd, {ParameterFactory.OutParameter(primaryKey, baseEntity)});");
-                        writer.Line($"AddCommonParams(cmd, {objectVar});");
-                        writer.Blank();
-                        writer.Line("long result = InsertRecord(cmd);");
-                        using (writer.Block("if (result > 0)"))
-                        {
-                            writer.Line($"{objectVar}.RowState = BaseBusinessEntity.RowStateEnum.NormalRow;");
+                        case InsertKeySource.Identity:
+                            writer.Line($"AddParameter(cmd, {ParameterFactory.OutParameter(primaryKey, baseEntity)});");
+                            break;
+
+                        case InsertKeySource.ColumnDefault:
+                            writer.Line("// An unset key is left to the column default and read back after the insert.");
+                            writer.Line($"bool assignKey = {objectVar}.{key} == default({primaryKeyType});");
+                            using (writer.Block("if (assignKey)"))
+                            {
+                                writer.Line($"AddParameter(cmd, {ParameterFactory.OutParameter(primaryKey, baseEntity)});");
+                            }
+
+                            using (writer.Block("else"))
+                            {
+                                writer.Line(
+                                    $"AddParameter(cmd, {ParameterFactory.InParameterFromObject(primaryKey, baseEntity, objectVar)});");
+                            }
+
+                            writer.Blank();
+                            break;
+
+                        default:
                             writer.Line(
-                                $"{objectVar}.{primaryKey.Name} = ({primaryKeyType})GetOutParameter(cmd, {baseEntity}.Property_{primaryKey.Name});");
-                        }
+                                $"AddParameter(cmd, {ParameterFactory.InParameterFromObject(primaryKey, baseEntity, objectVar)});");
+                            break;
                     }
-                    else
+
+                    writer.Line($"AddCommonParams(cmd, {objectVar});");
+                    writer.Blank();
+                    writer.Line("long result = InsertRecord(cmd);");
+                    using (writer.Block("if (result > 0)"))
                     {
-                        writer.Line(
-                            $"AddParameter(cmd, {ParameterFactory.InParameterFromObject(primaryKey, baseEntity, objectVar)});");
-                        writer.Line($"AddCommonParams(cmd, {objectVar});");
-                        writer.Blank();
-                        writer.Line("long result = InsertRecord(cmd);");
-                        using (writer.Block("if (result > 0)"))
+                        // The key goes on before the row state, so the property change it raises
+                        // cannot leave a freshly inserted row marked as modified.
+                        switch (keySource)
                         {
-                            writer.Line($"{objectVar}.RowState = BaseBusinessEntity.RowStateEnum.NormalRow;");
+                            case InsertKeySource.Identity:
+                                writer.Line(readKey);
+                                break;
+
+                            case InsertKeySource.ColumnDefault:
+                                using (writer.Block("if (assignKey)"))
+                                {
+                                    writer.Line(readKey);
+                                }
+
+                                writer.Blank();
+                                break;
                         }
+
+                        writer.Line($"{objectVar}.RowState = BaseBusinessEntity.RowStateEnum.NormalRow;");
                     }
 
                     writer.Blank();
-                    writer.Line("return result;");
+                    writer.Line($"return {objectVar}.{key};");
                 }
 
                 using (writer.Block("catch (SqlException x)"))

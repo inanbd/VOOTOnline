@@ -12,8 +12,8 @@ public sealed record SchemaSnapshot
     public required IReadOnlyList<SnapshotTable> Tables { get; init; }
 
     /// <summary>
-    /// Fingerprint of the generation settings the run used. When it differs, every generated
-    /// file may differ, so a changed-tables run falls back to all tables.
+    /// Fingerprint of the generation settings and generator version the run used. When it
+    /// differs, every generated file may differ, so a changed-tables run falls back to all tables.
     /// </summary>
     public required string SettingsFingerprint { get; init; }
 

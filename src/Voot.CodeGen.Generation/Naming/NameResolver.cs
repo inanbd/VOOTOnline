@@ -57,6 +57,22 @@ public sealed class NameResolver(GenerationSettings settings)
         return style == OutputStyle.Legacy ? info.LegacyClrType : info.ModernClrType;
     }
 
+    /// <summary>
+    /// Where a new row's key comes from. A key with a default only counts as database-assigned
+    /// when its type can be read back through an output parameter; any other key is the caller's.
+    /// </summary>
+    public static InsertKeySource InsertKeySourceOf(ColumnModel key)
+    {
+        if (key.IsIdentity)
+        {
+            return InsertKeySource.Identity;
+        }
+
+        return !string.IsNullOrWhiteSpace(key.DefaultValue) && SqlTypeMap.SupportsDefaultedKey(key)
+            ? InsertKeySource.ColumnDefault
+            : InsertKeySource.Caller;
+    }
+
     // ---- Foreign keys -----------------------------------------------------------------
 
     /// <summary>

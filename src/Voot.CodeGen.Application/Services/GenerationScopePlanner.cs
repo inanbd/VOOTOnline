@@ -38,7 +38,8 @@ public static class GenerationScopePlanner
 
         if (!string.Equals(baseline.SettingsFingerprint, currentSettingsFingerprint, StringComparison.Ordinal))
         {
-            return FallBack("The project's generation settings changed since the last generation, which affects every file");
+            return FallBack(
+                "The project's generation settings changed, or the generator was updated, since the last generation, which affects every file");
         }
 
         var before = baseline.ToDatabaseModel();

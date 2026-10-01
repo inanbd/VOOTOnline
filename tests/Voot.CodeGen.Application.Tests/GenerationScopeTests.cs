@@ -90,6 +90,19 @@ public class GenerationScopeTests
     }
 
     [Fact]
+    public void A_new_generator_output_version_changes_the_fingerprint()
+    {
+        // Otherwise the first changed-tables run after an upgrade would keep the old output for
+        // every table whose structure did not change.
+        var settings = Settings();
+
+        Assert.Equal(SettingsFingerprint.Compute(settings),
+            SettingsFingerprint.Compute(settings, CodeGenerator.OutputVersion));
+        Assert.NotEqual(SettingsFingerprint.Compute(settings, CodeGenerator.OutputVersion),
+            SettingsFingerprint.Compute(settings, CodeGenerator.OutputVersion - 1));
+    }
+
+    [Fact]
     public void Falls_back_to_all_tables_when_nothing_changed()
     {
         var plan = Plan(Baseline(TestSchema.Build()), TestSchema.Build());

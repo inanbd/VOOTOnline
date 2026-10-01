@@ -4,8 +4,8 @@ namespace Voot.CodeGen.Generation.Tests;
 
 /// <summary>
 /// A small synthetic database covering the cases the generator branches on: an identity key,
-/// a non-identity key, a nullable foreign key, audit columns, a junction table and a table
-/// with no primary key at all.
+/// a caller-supplied key, a key filled in by a column default, a nullable foreign key, audit
+/// columns, a junction table and a table with no primary key at all.
 /// </summary>
 public static class TestSchema
 {
@@ -21,7 +21,8 @@ public static class TestSchema
         bool foreignKey = false,
         int size = 0,
         int precision = 0,
-        int scale = 0) => new()
+        int scale = 0,
+        string? defaultValue = null) => new()
         {
             Name = name,
             Ordinal = ordinal,
@@ -34,6 +35,7 @@ public static class TestSchema
             Size = size,
             Precision = precision,
             Scale = scale,
+            DefaultValue = defaultValue,
             TableName = table
         };
 
@@ -136,6 +138,20 @@ public static class TestSchema
             ]
         };
 
+        // ---- tbl_Document: a GUID key the column default assigns ----
+        var documentId = Column("tbl_Document", "DocumentId", 0, "uniqueidentifier", SqlDataType.UniqueIdentifier,
+            primaryKey: true, defaultValue: "(newsequentialid())");
+        var documentTitle = Column("tbl_Document", "Title", 1, "nvarchar", SqlDataType.NVarChar, size: 200);
+
+        var document = new TableModel
+        {
+            Name = "tbl_Document",
+            Owner = "dbo",
+            Columns = [documentId, documentTitle],
+            PrimaryKey = new PrimaryKeyModel { Name = "PK_Document", MemberColumns = [documentId] },
+            ForeignKeys = []
+        };
+
         // ---- tbl_AuditLog: no primary key, must be skipped ----
         var auditMessage = Column("tbl_AuditLog", "Message", 0, "nvarchar", SqlDataType.NVarChar, size: -1);
 
@@ -151,7 +167,7 @@ public static class TestSchema
         return new DatabaseModel
         {
             Name = "TestDb",
-            Tables = [country, user, role, userRole, auditLog]
+            Tables = [country, user, role, userRole, document, auditLog]
         };
     }
 }

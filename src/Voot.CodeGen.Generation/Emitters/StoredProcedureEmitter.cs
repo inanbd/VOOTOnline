@@ -173,15 +173,26 @@ public sealed class StoredProcedureEmitter : EmitterBase
         }
     }
 
+    /// <summary>
+    /// The insert procedure always hands back the new row's key: through the key's OUTPUT
+    /// parameter, and as a one-row result set for callers that read one instead. It still
+    /// returns the row count, which the framework's InsertRecord reads.
+    /// </summary>
     private static void WriteInsert(CodeWriter writer, TableModel table, GenerationContext context, ColumnModel primaryKey)
     {
         var procedure = context.Names.InsertProcedure(table);
         var writable = WritableColumns(table, context);
-        var isIdentity = primaryKey.IsIdentity;
+        var keySource = NameResolver.InsertKeySourceOf(primaryKey);
+        var key = primaryKey.Name;
 
         WriteProcedureHeader(writer, table, context, procedure);
 
-        var parameters = new List<string> { Declare(primaryKey, isIdentity) };
+        // A defaulted key may be left NULL, which is what lets the column default assign it.
+        var keyParameter = keySource == InsertKeySource.ColumnDefault
+            ? $"@{key} {SqlTypeMap.SqlParameterType(primaryKey)} = NULL OUTPUT"
+            : Declare(primaryKey, output: true);
+
+        var parameters = new List<string> { keyParameter };
         parameters.AddRange(writable.Select(c => Declare(c)));
         WriteParameterList(writer, parameters);
 
@@ -190,39 +201,103 @@ public sealed class StoredProcedureEmitter : EmitterBase
         writer.Line("\tSET NOCOUNT ON;");
         writer.Blank();
 
-        var insertColumns = isIdentity ? writable : [primaryKey, .. writable];
-
-        writer.Line($"\tINSERT INTO {table.QualifiedName}");
-        writer.Line("\t(");
-        for (var i = 0; i < insertColumns.Count; i++)
+        switch (keySource)
         {
-            var comma = i < insertColumns.Count - 1 ? "," : string.Empty;
-            writer.Line($"\t\t[{insertColumns[i].Name}]{comma}");
+            case InsertKeySource.Identity:
+                WriteInsertStatement(writer, table, writable, outputKey: null);
+                writer.Blank();
+                writer.Line("\tDECLARE @Result int = @@ROWCOUNT;");
+
+                // SCOPE_IDENTITY avoids picking up an identity inserted by a trigger, which @@IDENTITY does.
+                writer.Line($"\tSET @{key} = SCOPE_IDENTITY();");
+                break;
+
+            case InsertKeySource.ColumnDefault:
+                writer.Line("\tDECLARE @Result int;");
+                writer.Line($"\tDECLARE @InsertedKeys TABLE ([{key}] {SqlTypeMap.SqlParameterType(primaryKey)});");
+                writer.Blank();
+                writer.Line($"\tIF @{key} IS NULL");
+                writer.Line("\tBEGIN");
+                writer.Indent();
+                writer.Line("\t-- No key supplied: leave the column out so its default assigns one.");
+                WriteInsertStatement(writer, table, writable, outputKey: primaryKey);
+                writer.Blank();
+                writer.Line("\tSET @Result = @@ROWCOUNT;");
+                writer.Line($"\tSELECT @{key} = [{key}] FROM @InsertedKeys;");
+                writer.Outdent();
+                writer.Line("\tEND");
+                writer.Line("\tELSE");
+                writer.Line("\tBEGIN");
+                writer.Indent();
+                WriteInsertStatement(writer, table, [primaryKey, .. writable], outputKey: null);
+                writer.Blank();
+                writer.Line("\tSET @Result = @@ROWCOUNT;");
+                writer.Outdent();
+                writer.Line("\tEND");
+                break;
+
+            default:
+                WriteInsertStatement(writer, table, [primaryKey, .. writable], outputKey: null);
+                writer.Blank();
+                writer.Line("\tDECLARE @Result int = @@ROWCOUNT;");
+                break;
         }
 
-        writer.Line("\t)");
-        writer.Line("\tVALUES");
-        writer.Line("\t(");
-        for (var i = 0; i < insertColumns.Count; i++)
-        {
-            var comma = i < insertColumns.Count - 1 ? "," : string.Empty;
-            writer.Line($"\t\t@{insertColumns[i].Name}{comma}");
-        }
-
-        writer.Line("\t)");
         writer.Blank();
-        writer.Line("\tDECLARE @Result int = @@ROWCOUNT;");
-
-        if (isIdentity)
-        {
-            // SCOPE_IDENTITY avoids picking up an identity inserted by a trigger, which @@IDENTITY does.
-            writer.Line($"\tSET @{primaryKey.Name} = SCOPE_IDENTITY();");
-        }
-
+        writer.Line("\t-- The new row's key, for callers that read a result set rather than the OUTPUT parameter.");
+        writer.Line($"\tSELECT @{key} AS [{key}];");
         writer.Blank();
         writer.Line("\tRETURN @Result;");
         writer.Line("END");
         WriteProcedureFooter(writer);
+    }
+
+    /// <summary>
+    /// One INSERT statement. With <paramref name="outputKey"/>, the inserted key is captured into
+    /// <c>@InsertedKeys</c>; OUTPUT ... INTO, unlike a bare OUTPUT, still works on a table with
+    /// triggers. A table with nothing to write gets DEFAULT VALUES.
+    /// </summary>
+    private static void WriteInsertStatement(
+        CodeWriter writer, TableModel table, IReadOnlyList<ColumnModel> columns, ColumnModel? outputKey)
+    {
+        var output = outputKey is null ? null : $"\tOUTPUT INSERTED.[{outputKey.Name}] INTO @InsertedKeys";
+
+        writer.Line($"\tINSERT INTO {table.QualifiedName}");
+
+        if (columns.Count == 0)
+        {
+            if (output is not null)
+            {
+                writer.Line(output);
+            }
+
+            writer.Line("\tDEFAULT VALUES;");
+            return;
+        }
+
+        writer.Line("\t(");
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var comma = i < columns.Count - 1 ? "," : string.Empty;
+            writer.Line($"\t\t[{columns[i].Name}]{comma}");
+        }
+
+        writer.Line("\t)");
+
+        if (output is not null)
+        {
+            writer.Line(output);
+        }
+
+        writer.Line("\tVALUES");
+        writer.Line("\t(");
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var comma = i < columns.Count - 1 ? "," : string.Empty;
+            writer.Line($"\t\t@{columns[i].Name}{comma}");
+        }
+
+        writer.Line("\t);");
     }
 
     private static void WriteUpdate(CodeWriter writer, TableModel table, GenerationContext context, ColumnModel primaryKey)

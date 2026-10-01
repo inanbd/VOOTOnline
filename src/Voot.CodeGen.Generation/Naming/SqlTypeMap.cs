@@ -201,6 +201,15 @@ public static class SqlTypeMap
         TryGet(column.NativeType) is { SqlType: SqlDataType.BigInt or SqlDataType.Int or SqlDataType.SmallInt
             or SqlDataType.TinyInt or SqlDataType.Decimal or SqlDataType.Money or SqlDataType.SmallMoney };
 
+    /// <summary>
+    /// True when a key filled in by a column default can be read back after the insert: a
+    /// uniqueidentifier or an integer. Their output parameter helpers take no size, and their
+    /// CLR default (<c>Guid.Empty</c>, <c>0</c>) can stand for "not set" on a new entity.
+    /// </summary>
+    public static bool SupportsDefaultedKey(ColumnModel column) =>
+        TryGet(column.NativeType) is { SqlType: SqlDataType.UniqueIdentifier or SqlDataType.BigInt
+            or SqlDataType.Int or SqlDataType.SmallInt or SqlDataType.TinyInt };
+
     /// <summary>True when the native type has a mapping; unknown types raise a diagnostic.</summary>
     public static bool IsKnown(string nativeType) => Map.ContainsKey(nativeType);
 

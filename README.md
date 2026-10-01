@@ -133,7 +133,8 @@ src/
   Voot.CodeGen.Infrastructure   SQL Server, Dapper, Identity stores, storage, background worker
   Voot.CodeGen.Web              MVC controllers and views
 tests/
-  Voot.CodeGen.Generation.Tests   the generator, over a synthetic schema
+  Voot.CodeGen.Generation.Tests   the generator, over a synthetic schema; compiles the output,
+                                  Legacy at C# 7, against a stand-in framework
   Voot.CodeGen.Application.Tests  SQL handling, schema diffing, sample inserts, trackers
 ```
 
@@ -163,13 +164,24 @@ For each table with a primary key, the archive contains:
 | `Entities/Bases/{Entity}Base.cs` | Column constants, backing fields, change-tracked properties, cloning |
 | `Entities/Bases/{Entity}.cs` | A navigation property for each foreign key; equality on the key |
 | `Entities/List/{Entity}List.cs` | A typed collection |
-| `DataAccess/Bases/{Entity}DataAccess.cs` | Insert, update, delete, get by key, get all, lookups by foreign key, paging, and reader mapping |
-| `BusinessLogic/Bases/{Entity}Manager.cs` | Persistence driven by row state, retrieval, and loading of related entities |
+| `DataAccess/Bases/{Entity}DataAccess.cs` | Insert (returning the new key), update, delete, get by key, get all, lookups by foreign key, paging, and reader mapping |
+| `BusinessLogic/Bases/{Entity}Manager.cs` | Persistence driven by row state, an insert that returns the new key, retrieval, and loading of related entities |
 | `StoreProcedures/{table}_Procedures.sql` | Every procedure the data access layer calls |
 | `Entities/{Entity}.cs`, `DataAccess/{Entity}DataAccess.cs`, `BusinessLogic/{Entity}Manager.cs` | Partial classes for hand-written code |
 
 Junction tables get data access built on a relation base class and no business manager. Tables
 without a primary key are skipped, with a warning in the run log.
+
+**Inserting always returns the new row's key.** `Insert` on the data access class and on the
+manager returns it and sets it on the entity, and the insert procedure hands it back through
+its `OUTPUT` parameter and as a one-row result set. Where the key comes from depends on the
+column:
+
+- an `IDENTITY` key is always assigned by the database, read with `SCOPE_IDENTITY()`;
+- a `uniqueidentifier` or integer key with a column default (`NEWID()`, `NEWSEQUENTIALID()`, a
+  sequence) is assigned by the database when the entity leaves it unset (`Guid.Empty` or `0`),
+  and stored as given otherwise;
+- any other key is set by the caller and stored as given.
 
 Files under a `Bases` folder are regenerated on every run and should not be edited. The partial
 classes beside them are for hand-written code; they are emitted on every run too, so take them
@@ -178,7 +190,7 @@ on the first generation only.
 Each project chooses an output style:
 
 - **Legacy** — `System.Data.SqlClient`, WCF `[DataContract]` attributes, block-scoped
-  namespaces.
+  namespaces. Compiles as C# 7, for projects on .NET Framework 4.6 to 4.8.
 - **Modern** — `Microsoft.Data.SqlClient`, file-scoped namespaces, nullable reference types, no
   WCF attributes.
 

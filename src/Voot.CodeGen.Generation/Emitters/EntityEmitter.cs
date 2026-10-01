@@ -109,7 +109,13 @@ public sealed class EntityEmitter : EmitterBase
         {
             using (writer.Block($"public override bool Equals(object{nullable} obj)"))
             {
-                using (writer.Block($"if (obj is not {className} other)"))
+                // Legacy output has to compile as C# 7 on .NET Framework, and `is not` is C# 9.
+                if (context.IsLegacy)
+                {
+                    writer.Line($"{className} other = obj as {className};");
+                }
+
+                using (writer.Block(context.IsLegacy ? "if (other == null)" : $"if (obj is not {className} other)"))
                 {
                     writer.Line("return false;");
                 }

@@ -56,7 +56,8 @@ if (_UserId > 0) { userObject.UserId = _UserId; }
 
 `Insert` returns the number of rows affected, so a successful single-row insert set the
 entity's key to `1`, discarding the identity value the data access layer had just read out of
-the procedure's output parameter. The generated manager now leaves the key alone.
+the procedure's output parameter. The generated manager now leaves the key alone, and `Insert`
+returns the key itself rather than a row count; see *Insert returns the new row's key* below.
 
 ### 5. Two generated type expressions did not compile
 
@@ -103,7 +104,9 @@ order, then audit columns — so the offsets line up whatever the physical layou
 ### 8. `Equals` threw on null
 
 `Entity.cst` emitted `obj.GetType() != typeof(X)`, which throws a `NullReferenceException`
-when passed null. The generated override now uses a pattern match.
+when passed null. The generated override now uses a type test that is false for null: an
+`is not` pattern in Modern output, and an `as` cast with a null check in Legacy output, since
+`is not` is C# 9 and Legacy output has to compile as C# 7.
 
 ### 9. Paging used `@@IDENTITY` and unvalidated sort input
 
@@ -155,7 +158,8 @@ compiling the generated output against the framework contract.
 ## Intentional additions
 
 - **Output style.** Each project selects Legacy (faithful to the originals:
-  `System.Data.SqlClient`, WCF `[DataContract]`, block namespaces, tabs) or Modern
+  `System.Data.SqlClient`, WCF `[DataContract]`, block namespaces, tabs, and C# 7 so it builds
+  in .NET Framework 4.6 to 4.8 projects) or Modern
   (`Microsoft.Data.SqlClient`, file-scoped namespaces, nullable reference types, C# keyword
   type names, no WCF attributes). The class and method surface is identical either way, so
   both compile against the same framework assembly.
@@ -165,6 +169,35 @@ compiling the generated output against the framework contract.
   generated code expects, since the archive ships generated files only.
 - **Diagnostics.** A table that fails generation is reported and skipped instead of aborting
   the run, so one bad table cannot cost the whole archive.
+
+### Insert returns the new row's key
+
+The originals returned the row count from every insert and only read an identity key back.
+Now inserting always hands back the key of the new row:
+
+- The insert procedure declares the key `OUTPUT` and sets it, ends with
+  `SELECT @Key AS [Key]` for callers that read a result set, and still `RETURN`s the row count,
+  which the framework's `InsertRecord` reads.
+- `{Entity}DataAccess.Insert` returns the key type instead of `long`, and sets the key on the
+  entity *before* setting `RowState` to `NormalRow`. It used to set the key second, so the
+  property change that raises could leave a freshly inserted row marked as modified.
+- `{Entity}Manager.Insert` is public and returns the key. `UpdateBase` reports a new row as
+  saved when its `RowState` became `NormalRow`, since a key is no success flag for every type.
+
+Where the key comes from is decided once, by `NameResolver.InsertKeySourceOf`, for both sides:
+
+| Key | Procedure | Data access |
+| --- | --- | --- |
+| `IDENTITY` | `SET @Key = SCOPE_IDENTITY()` | output parameter, always read back |
+| `uniqueidentifier` or integer with a default | `@Key ... = NULL OUTPUT`; when NULL the key column is left out, so the default assigns it, and `OUTPUT INSERTED.[Key] INTO` a table variable captures it | output parameter and read back when the entity's key is `default` (`Guid.Empty`, `0`); otherwise passed in |
+| anything else | inserted as passed | passed in |
+
+`OUTPUT ... INTO` rather than a bare `OUTPUT` keeps the insert working on tables with
+triggers. A default on a string, binary or decimal key is not relied on: reading one back
+would need a size or precision the output helpers do not take. A table with nothing to
+write but its key gets `DEFAULT VALUES` instead of an empty column list. All three key
+sources were run against SQL Server through the generated Legacy data access, including on
+tables with insert triggers.
 
 ### Extra data access constructors
 

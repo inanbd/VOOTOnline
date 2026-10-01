@@ -12,6 +12,14 @@ namespace Voot.CodeGen.Generation;
 /// </summary>
 public sealed class CodeGenerator : ICodeGenerator
 {
+    /// <summary>
+    /// Raised whenever the emitted code changes for the same schema and settings. It is part of
+    /// the settings fingerprint, so the first changed-tables run after an upgrade regenerates
+    /// every table rather than leaving the old output in place for tables that did not change.
+    /// </summary>
+    /// <remarks>2: insert returns the new row's key; Legacy output compiles as C# 7.</remarks>
+    public const int OutputVersion = 2;
+
     private readonly IReadOnlyList<IEmitter> _emitters;
 
     public CodeGenerator() : this(DefaultEmitters()) { }
@@ -129,7 +137,7 @@ public sealed class CodeGenerator : ICodeGenerator
         writer.Blank();
         writer.Line($"Generated : {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
         writer.Line($"Database  : {context.Database.Name}");
-        writer.Line($"Style     : {s.OutputStyle}");
+        writer.Line($"Style     : {s.OutputStyle}{(context.IsLegacy ? " (C# 7, .NET Framework 4.6 to 4.8)" : string.Empty)}");
         writer.Line($"Tables    : {generated} generated, {skipped} skipped");
         writer.Line($"Files     : {files.Count + 1}");
         writer.Line($"Scope     : {(selection is null ? "all tables" : "changed tables only")}");
@@ -198,6 +206,7 @@ public sealed class CodeGenerator : ICodeGenerator
         writer.Line("                          InsertRecord, UpdateRecord, DeleteRecord,");
         writer.Line("                          SelectRecords, FillBaseObject, ALL_AVAILABLE_RECORDS");
         writer.Line("                          and the p* parameter helpers (pInt32, pNVarChar, ...)");
+        writer.Line("                          with the *Out forms for keys (pInt32Out, pGuidOut, ...)");
         writer.Line("  BaseRelationData        the same surface for junction tables");
         writer.Line("  BaseManager             base business manager");
         writer.Line("  PagedRequest            PageIndex, RowPerPage, WhereClause, SortColumn,");
@@ -208,6 +217,19 @@ public sealed class CodeGenerator : ICodeGenerator
         writer.Line("The base classes are expected to supply the audit columns");
         writer.Line($"({string.Join(", ", s.AuditColumns)}) themselves: the stored procedures declare");
         writer.Line("parameters for them, and the generated C# does not pass them.");
+        writer.Blank();
+
+        writer.Line("Inserting");
+        writer.Line("---------");
+        writer.Line("Insert returns the key of the new row and sets it on the object, in the data");
+        writer.Line("access class and the manager alike. The insert procedure hands the key back");
+        writer.Line("through its OUTPUT parameter and as a one-row result set, and still returns the");
+        writer.Line("row count.");
+        writer.Blank();
+        writer.Line("An IDENTITY key is always assigned by the database. A uniqueidentifier or integer");
+        writer.Line("key with a column default (NEWID(), NEWSEQUENTIALID(), a sequence) is assigned by");
+        writer.Line("the database when it is left unset (Guid.Empty or 0), and stored as given");
+        writer.Line("otherwise. Any other key is the caller's to set.");
         writer.Blank();
 
         writer.Line("A note on GetByQuery and GetPaged");

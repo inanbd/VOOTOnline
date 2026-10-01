@@ -133,8 +133,9 @@
                     <select asp-for="Settings.OutputStyle" class="form-select"
                             asp-items="Html.GetEnumSelectList<OutputStyle>()"></select>
                     <div class="form-text">
-                        Legacy matches the original templates. Modern uses Microsoft.Data.SqlClient,
-                        file-scoped namespaces and nullable reference types.
+                        Legacy matches the original templates and compiles as C# 7, for .NET Framework
+                        4.6 to 4.8. Modern uses Microsoft.Data.SqlClient, file-scoped namespaces and
+                        nullable reference types.
                     </div>
                 </div>
                 <div class="col-md-4 mb-3">

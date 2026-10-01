@@ -6,6 +6,7 @@ public enum OutputStyle
     /// <summary>
     /// Faithful to the original CodeSmith templates: <c>System.Data.SqlClient</c>,
     /// WCF <c>[DataContract]</c>/<c>[CollectionDataContract]</c>, block namespaces, no nullable annotations.
+    /// Compiles as C# 7, for projects on .NET Framework 4.6 to 4.8.
     /// </summary>
     Legacy = 0,
 
